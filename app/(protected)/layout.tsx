@@ -26,6 +26,7 @@ import {
   DollarOutlined,
   FileOutlined,
   LogoutOutlined,
+  MenuOutlined 
 } from "@ant-design/icons";
 import { usePathname } from "next/navigation";
 
@@ -148,7 +149,7 @@ const menuData = [
         title: "User Management",
         icon: <UserOutlined />,
         children: [
-          { key: "user-list", title: "User Accounts", link: "/user/index", permissions: ["user-list"] },
+          { key: "user-list", title: "User Accounts", link: "/users", permissions: ["user-list"] },
           { key: "user-create", title: "Create New", link: "/user/create", permissions: ["user-create"] },
         ],
       },
@@ -294,11 +295,35 @@ function LayoutContent({ children }: Props) {
         collapsible
         collapsed={collapsed}
         onCollapse={(value) => setCollapsed(value)}
+        breakpoint="lg"          // 👈 auto trigger at large breakpoint
+        collapsedWidth="0"       // 👈 hide completely on small screens
+        trigger={null}   // 👈 disable the default floating trigger
         width={240}
-      >
-        <div style={{ padding: 16, textAlign: "center" }}>
-          <Avatar src="/default-profile.png" size={64} />
-          {!collapsed && <Title level={5} style={{ color: "white", marginTop: 8 }}>{user.name}</Title>}
+      > 
+        <div
+          style={{
+            padding: collapsed ? 8 : 16,
+            textAlign: "center",
+            transition: "all 0.2s ease",
+          }}
+        >
+          <Avatar
+            src="/default-profile.png"
+            size={collapsed ? 40 : 64}
+          />
+
+          {!collapsed && (
+            <Title
+              level={5}
+              style={{
+                color: "white",
+                marginTop: 8,
+                fontSize: 14,
+              }}
+            >
+              {user.name}
+            </Title>
+          )}
         </div>
         <Divider style={{ marginTop: -10, marginBottom: 0, borderColor: "rgba(0, 195, 255, 0.25)" }} />
         <Menu
@@ -313,6 +338,7 @@ function LayoutContent({ children }: Props) {
         {/* Header */}
         <Header
           style={{
+            height: 40,
             padding: "0 16px",
             background: "#fff",
             display: "flex",
@@ -320,9 +346,15 @@ function LayoutContent({ children }: Props) {
             alignItems: "center",
           }}
         >
-          <Title level={4} style={{ margin: 0 }}>
+          <Button
+            type="text"
+            icon={<MenuOutlined />}
+            onClick={() => setCollapsed(!collapsed)}
+            style={{ fontSize: 18 }}
+          />
+          {/* <Title level={4} style={{ margin: 0 }}>
             ADDESSA File Manager
-          </Title>
+          </Title> */}
 
           <Dropdown menu={{ items: avatarMenu }} placement="bottomRight">
             <Button type="text">
@@ -333,7 +365,7 @@ function LayoutContent({ children }: Props) {
         </Header>
 
         {/* Main Content */}
-        <Content style={{ margin: 16, background: "#fff", padding: 24 }}>
+        <Content style={{ margin: 10, background: "#fff", padding: 24 }}>
           {children}
         </Content>
       </Layout>

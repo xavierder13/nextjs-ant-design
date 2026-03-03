@@ -51,7 +51,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .get("/api/auth/init")
       .then((res) => {
         const data = res.data;
-        console.log(data);
         
         // Adjust this depending on your backend structure
         setUser(data.user);
