@@ -15,7 +15,6 @@ export default function ProtectedLayout({ children, permission }: ProtectedLayou
   const router = useRouter();
   const { hasPermission } = useAuth();
   useEffect(() => {
-    console.log(permission);
     
     if (permission && !hasPermission(permission)) 
     {
@@ -23,5 +22,5 @@ export default function ProtectedLayout({ children, permission }: ProtectedLayou
     }
   }, [permission]);
 
-  return <>{children}</>;
+  return <div>{children}</div>;
 }
