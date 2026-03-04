@@ -26,7 +26,6 @@ import {
   DollarOutlined,
   FileOutlined,
   LogoutOutlined,
-  MenuOutlined 
 } from "@ant-design/icons";
 import { usePathname } from "next/navigation";
 
