@@ -26,6 +26,7 @@ import {
   DollarOutlined,
   FileOutlined,
   LogoutOutlined,
+  MenuOutlined 
 } from "@ant-design/icons";
 import { usePathname } from "next/navigation";
 
@@ -294,11 +295,34 @@ function LayoutContent({ children }: Props) {
         collapsible
         collapsed={collapsed}
         onCollapse={(value) => setCollapsed(value)}
+        breakpoint="lg"          // 👈 auto trigger at large breakpoint
+        collapsedWidth="0"       // 👈 hide completely on small screens
         width={240}
       >
-        <div style={{ padding: 16, textAlign: "center" }}>
-          <Avatar src="/default-profile.png" size={64} />
-          {!collapsed && <Title level={5} style={{ color: "white", marginTop: 8 }}>{user.name}</Title>}
+        <div
+          style={{
+            padding: collapsed ? 8 : 16,
+            textAlign: "center",
+            transition: "all 0.2s ease",
+          }}
+        >
+          <Avatar
+            src="/default-profile.png"
+            size={collapsed ? 40 : 64}
+          />
+
+          {!collapsed && (
+            <Title
+              level={5}
+              style={{
+                color: "white",
+                marginTop: 8,
+                fontSize: 14,
+              }}
+            >
+              {user.name}
+            </Title>
+          )}
         </div>
         <Divider style={{ marginTop: -10, marginBottom: 0, borderColor: "rgba(0, 195, 255, 0.25)" }} />
         <Menu
@@ -320,6 +344,12 @@ function LayoutContent({ children }: Props) {
             alignItems: "center",
           }}
         >
+          {/* <Button 
+            type="text"
+            icon={<MenuOutlined />}
+            onClick={() => setCollapsed(!collapsed)}
+            style={{ fontSize: 18 }}
+          /> */}
           <Title level={4} style={{ margin: 0 }}>
             ADDESSA File Manager
           </Title>
