@@ -1,8 +1,31 @@
+"use client"
 
+import { api } from "@/lib/axios";
+import { useEffect, useState } from "react";
 
-export default async function Contact() {
-  const response = await fetch("https://jsonplaceholder.typicode.com/users");
-  const users = await response.json();
+export default function UsersPage() {
+
+  const [users, setUsers] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [positions, setPositions] = useState([]);
+  const [roles, setRoles] = useState([]);
+  
+  const [loading, setLoading] = useState(true);
+  
+  useEffect(() => {
+    api.get("/api/user/index").then(
+      (response) => {
+        console.log(response.data.users);
+        const data = response.data;
+        setUsers(data.users);
+        setBranches(data.branches);
+        setPositions(data.positions);
+        setRoles(data.roles);
+        setLoading(false);
+    });
+
+  }, [])
+  if(loading) return <div>Loading...</div>
   return (
     
     <div>

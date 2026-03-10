@@ -1,12 +1,12 @@
 import ProtectedLayout from "@/components/ProtectedLayout";
 
-export default function DashboardLayout({
+export default function EmployeeMasterDataPage({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <ProtectedLayout permission="user-list">
+    <ProtectedLayout permission="employee-master-data-list">
       {children}
     </ProtectedLayout>
   );

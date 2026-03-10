@@ -1,8 +1,20 @@
+
+"use client";
+
+import { Button, Result } from 'antd';
+import { useRouter } from 'next/navigation';
+
 export default function UnauthorizedPage() {
+  const router = useRouter();
+  const redirecHome = () => {
+    router.push('/');
+  }
   return (
-    <div>
-      <h1>403 - Unauthorized</h1>
-      <p>You do not have permission to access this page.</p>
-    </div>
+    <Result
+      status="403"
+      title="403"
+      subTitle="Sorry, you are not authorized to access this page."
+      extra={<Button type="primary" onClick={redirecHome}>Back Home</Button>}
+    />
   );
 }

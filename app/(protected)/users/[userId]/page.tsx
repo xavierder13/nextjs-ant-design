@@ -1,43 +1,22 @@
-import { notFound } from "next/navigation";
+"use client";
 
-async function fetchUser(id: string) {
-  const response = await fetch(`https://jsonplaceholder.typicode.com/users/${id}`);
-  
-  if(!response.ok)
-  {
-    return null;
-  }
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/axios";
 
-  const user = await response.json();
-  return user;
-}
+export default function UserPage() {
 
-export default async function UserPage({params} : {
-  params: Promise <{ userId: String }>
-}) {
+  const params = useParams();
+  const userId = params.userId as string;
+  const [user, setUser] = useState<any>(null);
 
-  const { userId } = await params;
-  const user = await fetchUser(userId);
-  if(!user)
-  {
-    notFound();
-  }
-  
-  return (
-    <div>
-      <h1>{ user.name }</h1>
-      <p>
-        <strong>Email:</strong> { user.email }
-      </p>
-      <p>
-        <strong>Phone:</strong> { user.phone }
-      </p>
-      <p>
-        <strong>Username:</strong> { user.username }
-      </p>
-      <p>
-        <strong>Website:</strong> { user.website }
-      </p>
-    </div>
-  )
+  useEffect(() => {
+    api.get(`/api/user/edit/${userId}`)
+      .then((res) => setUser(res.data.user))
+      .catch(console.error);
+  }, [userId]);
+
+  if (!user) return <div>Loading...</div>;
+
+  return <div>{user.name}</div>;
 }

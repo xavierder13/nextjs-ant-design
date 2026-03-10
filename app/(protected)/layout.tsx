@@ -26,6 +26,7 @@ import {
   DollarOutlined,
   FileOutlined,
   LogoutOutlined,
+  MenuOutlined
 } from "@ant-design/icons";
 import { usePathname } from "next/navigation";
 
@@ -79,6 +80,7 @@ const menuData = [
       },
     ],
   },
+  { type: 'divider' },
   // ================= HR / PAYROLL =================
   {
     key: 'hr-group',
@@ -97,7 +99,7 @@ const menuData = [
         title: "Employee",
         icon: <UserOutlined />,
         children: [
-          { key: "employee-master-data", title: "Master Data", link: "/employee/master_data", permissions: ["employee-master-data-list"] },
+          { key: "employee-master-data", title: "Master Data", link: "/employee-master-data", permissions: ["employee-master-data-list"] },
           { key: "employee-reports", title: "Employee Reports", link: "/employee/list", permissions: ["employee-list"] },
         ],
       },
@@ -116,7 +118,7 @@ const menuData = [
       },
     ],
   },
-
+  { type: 'divider' },
   // ================= INFORMATION SYSTEM =================
   {
     key: 'info-system-group',
@@ -136,7 +138,7 @@ const menuData = [
       },
     ],
   },
-
+  { type: 'divider' },
   // ================= SETUP & AUTH =================
   {
     key: 'setup-group',
@@ -163,12 +165,12 @@ const menuData = [
         key: "permissions",
         title: "Permission",
         icon: <SettingOutlined />,
-        link: "/permission/index",
+        link: "/permissions",
         permissions: ["permission-list", "permission-create"],
       },
     ],
   },
-
+  { type: 'divider' },
   // ================= SAP =================
   {
     key: 'sap-group',
@@ -277,6 +279,17 @@ function LayoutContent({ children }: Props) {
     return "";
   };
 
+  const findOpenKeys = () => {
+    const openKeys: string[] = [];
+    menuData.forEach(group => {
+      if (group.children) {
+        const activeChild = group.children.find(child => pathname.startsWith(child.link!));
+        if (activeChild) openKeys.push(group.key);
+      }
+    });
+    return openKeys;
+  };
+
   // Build dropdown items
   const avatarMenu: MenuProps["items"] = [
     {
@@ -328,7 +341,8 @@ function LayoutContent({ children }: Props) {
         <Menu
           theme="dark"
           mode="inline"
-          defaultSelectedKeys={[findActiveKey()]}
+          selectedKeys={[findActiveKey()]}
+          defaultOpenKeys={findOpenKeys()}
           items={menuData.map(generateMenuItem).filter(Boolean)}
         />
       </Sider>
