@@ -11,6 +11,7 @@ interface EmployeeTableProps {
   selectedRowKeys: number[];
   setSelectedRowKeys: (keys: number[]) => void;
   onDelete: (id: number) => void;
+  editData: (data: any[]) => void;
   onChangePagination: (page: number, pageSize: number) => void;
 }
 
@@ -22,6 +23,7 @@ export default function EmployeeTable({
   selectedRowKeys,
   setSelectedRowKeys,
   onDelete,
+  editData,
   onChangePagination
 }: EmployeeTableProps) {
 
@@ -32,7 +34,7 @@ export default function EmployeeTable({
       render: (_: any, record: any) => (
         <Space>
           <Tooltip title="Edit">
-            <Button color="green" variant="outlined" icon={<EditOutlined />} />
+            <Button color="green" variant="outlined" icon={<EditOutlined />} onClick={() => editData(record)} />
           </Tooltip>
           <Popconfirm title="Delete employee?" onConfirm={() => onDelete(record.id)}>
             <Tooltip title="Delete">

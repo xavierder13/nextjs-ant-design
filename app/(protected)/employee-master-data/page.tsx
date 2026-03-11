@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/axios";
-import { Card, Row, Col, Typography, Input, Space, Button, Grid } from "antd";
+import { Card, Row, Col, Typography, Input, Space, Button, Grid, Divider } from "antd";
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
 
 import ColumnSelector from "./components/ColumnSelector";
 import EmployeeTable from "./components/EmployeeTable";
 import EmployeeCardMobile from "./components/EmployeeCardMobile";
 import PaginationControls from "./components/PaginationControls";
+import Modal from "./components/EmployeeModal";
+import EmployeeTabs from "./components/EmployeeTabs";
 
 const { useBreakpoint } = Grid;
 
@@ -71,6 +73,9 @@ export default function EmployeeListPage() {
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10, total: 0 });
   const [search, setSearch] = useState("");
   const [selectedHeaders, setSelectedHeaders] = useState<any[]>(defaultHeaders);
+  const [modal, setModal] = useState<boolean>(false);
+  const [editedIndex, setEditedIndex] = useState<number>(-1);
+  const [modalTitle, setModalTitle] = useState<string>("New Employee");
 
   const fetchEmployees = async (page = 1, pageSize = 10) => {
     setLoading(true);
@@ -91,70 +96,101 @@ export default function EmployeeListPage() {
     } finally { setLoading(false); }
   };
 
+  const saveData = () => {
+    console.log('saved data')
+  }
+
+  const editData = async (data: any) => {
+    const index = employees.indexOf(data);
+    setEditedIndex(index);
+    setModalTitle("Edit Employee");
+    setModal(true);
+  }
+
+  const deleteData = () => {
+    fetchEmployees();
+  }
+
+  const closeModal = () => {
+    setModal(false);
+  }
+
   useEffect(() => { fetchEmployees(); }, [selectedHeaders]);
 
   return (
-    <Card
-      title={
-        <Row gutter={[8, 8]}>
-          <Col xs={24} md={6}>
-            <Typography.Title level={4} style={{ margin: 0 }}>
-              Employee Master Data
-            </Typography.Title>
-          </Col>
+    <>
+      <Card
+        title={
+          <Row gutter={[8, 8]}>
+            <Col xs={24} md={6}>
+              <Typography.Title level={4} style={{ margin: 0 }}>
+                Employee Master Data
+              </Typography.Title>
+            </Col>
 
-          <Col xs={24} md={8}>
-            <Input
-              placeholder="Search..."
-              prefix={<SearchOutlined />}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </Col>
+            <Col xs={24} md={8}>
+              <Input
+                placeholder="Search..."
+                prefix={<SearchOutlined />}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </Col>
 
-          <Col xs={24} md={6}>
-            <Space>
-              <Button type="primary" icon={<SearchOutlined />} onClick={() => fetchEmployees(1)}>Search</Button>
-              <Button icon={<ReloadOutlined />} onClick={() => fetchEmployees()}>Refresh</Button>
-            </Space>
-          </Col>
-        </Row>
-      }
-    >
-      <Space style={{ marginBottom: 16 }}>
-        <ColumnSelector headers={headers} selectedHeaders={selectedHeaders} onChange={setSelectedHeaders} />
-      </Space>
+            <Col xs={24} md={6}>
+              <Space>
+                <Button type="primary" icon={<SearchOutlined />} onClick={() => fetchEmployees(1)}>Search</Button>
+                <Button icon={<ReloadOutlined />} onClick={() => fetchEmployees()}>Refresh</Button>
+              </Space>
+            </Col>
+          </Row>
+        }
+      >
+        <Space style={{ marginBottom: 16 }}>
+          <ColumnSelector headers={headers} selectedHeaders={selectedHeaders} onChange={setSelectedHeaders} />
+        </Space>
 
-      {!isMobile && (
-        <EmployeeTable
-          employees={employees}
-          columns={selectedHeaders.map((h) => ({ title: h.title, dataIndex: h.dataIndex, render: h.render }))}
-          loading={loading}
-          pagination={pagination}
-          selectedRowKeys={selectedRowKeys}
-          setSelectedRowKeys={setSelectedRowKeys}
-          onDelete={(id) => fetchEmployees()}  // can add delete logic
-          onChangePagination={(page, pageSize) => fetchEmployees(page, pageSize)}
-        />
-      )}
-
-      {isMobile && (
-        <>
-          <EmployeeCardMobile
+        {!isMobile && (
+          <EmployeeTable
             employees={employees}
-            selectedHeaders={selectedHeaders}
+            columns={selectedHeaders.map((h) => ({ title: h.title, dataIndex: h.dataIndex, render: h.render }))}
+            loading={loading}
+            pagination={pagination}
             selectedRowKeys={selectedRowKeys}
             setSelectedRowKeys={setSelectedRowKeys}
-            onDelete={(id) => fetchEmployees()}  // can add delete logic
+            editData={editData}
+            onDelete={deleteData}  // can add delete logic
+            onChangePagination={(page, pageSize) => fetchEmployees(page, pageSize)}
           />
-          <PaginationControls
-            pagination={pagination}
-            pageSizeOptions={PAGE_SIZE_OPTIONS}
-            isSmallScreen={isSmallScreen}
-            onChange={(page, pageSize) => fetchEmployees(page, pageSize)}
-          />
-        </>
-      )}
-    </Card>
+        )}
+
+        {isMobile && (
+          <>
+            <EmployeeCardMobile
+              employees={employees}
+              selectedHeaders={selectedHeaders}
+              selectedRowKeys={selectedRowKeys}
+              setSelectedRowKeys={setSelectedRowKeys}
+              onDelete={deleteData}  // can add delete logic
+              editData={editData}
+            />
+            <PaginationControls
+              pagination={pagination}
+              pageSizeOptions={PAGE_SIZE_OPTIONS}
+              isSmallScreen={isSmallScreen}
+              onChange={(page, pageSize) => fetchEmployees(page, pageSize)}
+            />
+          </>
+        )}
+      </Card>
+      <Modal
+        visible={modal}
+        title={modalTitle}
+        onCancel={closeModal}
+        onSave={saveData}
+      >
+        <EmployeeTabs/>
+      </Modal>
+    </>
   );
 }
