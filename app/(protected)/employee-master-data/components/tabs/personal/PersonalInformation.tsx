@@ -26,7 +26,7 @@ export default function PersonalInformation() {
   return (
     <Form form={form} layout="vertical">
       <Row gutter={16}>
-        <Col xs={24} md={4} lg={4} xl={4}>
+        <Col xs={24} md={8} lg={8} xl={6}>
           <Form.Item
             label="Last Name"
             name="lastname"
@@ -37,7 +37,7 @@ export default function PersonalInformation() {
             <Input />
           </Form.Item>
         </Col>
-        <Col xs={24} md={4}>
+        <Col xs={24} md={8} lg={8} xl={6}>
           <Form.Item
             label="First Name"
             name="firstname"
@@ -48,7 +48,7 @@ export default function PersonalInformation() {
             <Input />
           </Form.Item>
         </Col>
-         <Col xs={24} md={4} lg={4} xl={4}>
+         <Col xs={24} md={8} lg={8} xl={6}>
           <Form.Item
             label="Middle Name"
             name="middlename"
@@ -58,7 +58,7 @@ export default function PersonalInformation() {
         </Col>
       </Row>
       <Row gutter={16}>
-        <Col xs={24} md={4} lg={4} xl={4}>
+        <Col xs={24} md={8} lg={8} xl={6}>
           <Form.Item
             label="Date of Birth"
             name="dob"
@@ -71,13 +71,13 @@ export default function PersonalInformation() {
           </Form.Item>
         </Col>
 
-        <Col xs={24} md={4} lg={4} xl={4}>
+        <Col xs={24} md={8} lg={8} xl={6}>
           <Form.Item label="Age" name="age">
             <Input value={age} readOnly />
           </Form.Item>
         </Col>
 
-        <Col xs={24} md={4} lg={4} xl={4}>
+        <Col xs={24} md={8} lg={8} xl={6}>
           <Form.Item
             label="Gender"
             name="gender"
@@ -94,7 +94,7 @@ export default function PersonalInformation() {
         </Col>
       </Row>
       <Row gutter={16}>
-        <Col xs={24} md={4} lg={4} xl={4}>
+        <Col xs={24} md={8} lg={8} xl={6}>
           <Form.Item
             label="Civil Status"
             name="civilStatus"
@@ -112,7 +112,7 @@ export default function PersonalInformation() {
             />
           </Form.Item>
         </Col>
-        <Col xs={24} md={4} lg={4} xl={4}>
+        <Col xs={24} md={8} lg={8} xl={6}>
           <Form.Item
             label="Contact Number"
             name="contact"
@@ -124,7 +124,7 @@ export default function PersonalInformation() {
             <Input />
           </Form.Item>
         </Col>
-        <Col xs={24} md={4} lg={4} xl={4}>
+        <Col xs={24} md={8} lg={8} xl={6}>
           <Form.Item
             label="Email"
             name="email"
