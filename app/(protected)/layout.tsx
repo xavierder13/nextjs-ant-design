@@ -385,9 +385,7 @@ function LayoutContent({ children }: Props) {
             overflowY: 'auto',
             background: "#fff",
             border: "none",
-          }}
-          // Customize icons via CSS
-          className="custom-menu"
+          }}z
         />
       </Sider>
 

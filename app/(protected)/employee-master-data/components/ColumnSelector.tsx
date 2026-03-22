@@ -1,6 +1,6 @@
 "use client";
 
-import { Select, message, Space } from "antd";
+import { Select, message, Space, Typography } from "antd";
 
 interface ColumnSelectorProps {
   headers: any[];
@@ -14,7 +14,7 @@ export default function ColumnSelector({ headers, selectedHeaders, onChange }: C
       {/* COLUMN SELECT */}
       <Space style={{ marginBottom: 0 }}>
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <label>Columns Selector</label>
+          <Typography.Text strong>Column Selector</Typography.Text>
 
           <Select
             mode="multiple"
