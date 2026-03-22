@@ -180,6 +180,11 @@ export default function EmployeeListPage() {
             </Col>
           </Row>
         }
+        styles={{
+          header: isMobile
+            ? { paddingTop: 10, paddingBottom: 10 }
+            : {}
+        }}
       >
         <Space style={{ marginBottom: 16 }}>
           <ColumnSelector headers={headers} selectedHeaders={selectedHeaders} onChange={setSelectedHeaders} />

@@ -53,16 +53,15 @@ export default function EmployeeTable({
       dataSource={employees}
       loading={loading}
       scroll={{ x: "max-content" }}
-
       rowSelection={{
         selectedRowKeys,
         onChange: (keys) => setSelectedRowKeys(keys as number[])
       }}
-
       pagination={{
         ...pagination,
         onChange: (page, pageSize) => onChangePagination(page, pageSize),
       }}
+      size="small"
     />
   );
 }

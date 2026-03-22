@@ -18,6 +18,8 @@ import {
   Breadcrumb,
   Form,
   Modal,
+  Grid,
+  Divider,
 } from "antd";
 import Link from "next/link";
 import { 
@@ -28,6 +30,8 @@ import {
   CloseOutlined 
 } from "@ant-design/icons";
 
+const { useBreakpoint } = Grid;
+
 export default function PermissionListPage() {
   const [formData] = Form.useForm();
   const [searchForm] = Form.useForm();
@@ -37,6 +41,10 @@ export default function PermissionListPage() {
   const [modal, setModal] = useState<boolean>(false);
   const [modalTitle, setModalTitle] = useState<String>("New Permission");
   const [editedIndex, setEditedIndex] = useState<int>(-1);
+
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+  const isSmallScreen = !screens.sm;
 
   const columns = [
     {
@@ -168,7 +176,7 @@ export default function PermissionListPage() {
           <Row gutter={[8, 8]}>
             <Col xs={24} md={6}>
               <Typography.Title level={4} style={{ margin: 0 }}>
-                Employee Master Data
+                Permission List
               </Typography.Title>
             </Col>
 
@@ -189,15 +197,65 @@ export default function PermissionListPage() {
             </Col>
           </Row>
         }
+        styles={{
+          header: isMobile
+            ? { paddingTop: 10, paddingBottom: 10 }
+            : {}
+        }}
       >
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={filteredPermissions}
-          loading={loading}
-        />
-      </Card>
+        {!isMobile && (
+          <Table
+            rowKey="id"
+            columns={columns}
+            dataSource={filteredPermissions}
+            loading={loading}
+            size="small"
+          />
+        )}
 
+        {isMobile && (
+          filteredPermissions.map((record) => (
+            <Card key={record.id} size="small" style={{ marginBottom: 12 }}>
+              
+              {/* Fields */}
+              {columns
+                .filter(col => col.dataIndex) // ignore actions column here
+                .map((col: any) => (
+                  <div key={col.dataIndex} style={{ marginBottom: 8 }}>
+                    <Typography.Text strong>{col.title}</Typography.Text>
+                    <div>
+                      {col.render
+                        ? col.render(record[col.dataIndex], record)
+                        : record[col.dataIndex]}
+                    </div>
+                  </div>
+                ))}
+
+              <Divider />
+
+              {/* Actions */}
+              <Space>
+                <Tooltip title="Edit">
+                  <Button
+                    color="green"
+                    variant="outlined"
+                    icon={<EditOutlined />}
+                    onClick={() => editData(record)}
+                  />
+                </Tooltip>
+
+                <Popconfirm title="Delete?" onConfirm={() => onDelete(record.id)}>
+                  <Tooltip title="Delete">
+                    <Button danger icon={<DeleteOutlined />} />
+                  </Tooltip>
+                </Popconfirm>
+              </Space>
+            </Card>
+          ))
+        )}
+        
+      </Card>
+        
       <Modal
         open={modal}
         title={modalTitle}
