@@ -225,73 +225,94 @@ function LayoutContent({ children }: Props) {
   const generateMenuItem = (item: any): any => {
     if (!item) return null;
 
-    // 1️⃣ Divider
+    // Divider
     if (item.type === "divider") return { type: "divider" };
 
-    // 2️⃣ Group
+    // Group
     if (item.type === "group") {
       const children = item.children?.map(generateMenuItem).filter(Boolean);
       if (!children?.length) return null;
 
-      return {
-        type: "group",
-        key: item.key,
-        label: item.label,
-        children,
-      };
+      // Wrap group label with icon if exists
+      const labelContent = item.icon
+        ? (
+          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {React.isValidElement(item.icon)
+              ? React.cloneElement(item.icon, { style: { color: "#1890ff" } }) // primary color
+              : item.icon}
+            <span>{item.label}</span>
+          </span>
+        )
+        : item.label;
+
+      return { type: "group", key: item.key, label: labelContent, children };
     }
 
-    // 3️⃣ Permission check
+    // Permission check
     if (item.permission && !hasPermission(item.permission)) return null;
     if (item.permissions && !item.permissions.some((p: string) => hasPermission(p))) return null;
 
-    // 4️⃣ Submenu with children
+    // Submenu
     if (item.children) {
       const children = item.children.map(generateMenuItem).filter(Boolean);
       if (!children.length) return null;
 
       return {
         key: item.key,
-        icon: item.icon,
+        icon: React.isValidElement(item.icon)
+          ? React.cloneElement(item.icon, { style: { color: "#1890ff" } }) // primary color
+          : item.icon,
         label: item.title,
         children,
       };
     }
 
-    // 5️⃣ Normal menu item
+    // Normal menu item with icon color control
+    const isActive = item.key === activeKey;
+
     return {
       key: item.key,
-      icon: item.icon,
       label: item.link ? <Link href={item.link}>{item.title}</Link> : item.title,
+      icon: React.isValidElement(item.icon)
+        ? React.cloneElement(item.icon as React.ReactElement, {
+            style: { color: isActive ? undefined : "#1890ff" }, // primary color if inactive
+          })
+        : item.icon,
     };
   };
 
       
   // Determine active menu key based on pathname
-  const findActiveKey = () => {
-    for (let item of menuData) {
-      if (item.link && pathname.startsWith(item.link)) return item.key;
-      if (item.children) {
-        const child = item.children.find(c => pathname.startsWith(c.link!));
-        if (child) return child.key;
-      }
-    }
-    return "";
-  };
+  // const findActiveKey = () => {
+  //   for (let item of menuData) {
+  //     if (item.link && pathname.startsWith(item.link)) return item.key;
+  //     if (item.children) {
+  //       const child = item.children.find(c => pathname.startsWith(c.link!));
+  //       if (child) return child.key;
+  //     }
+  //   }
+  //   return "";
+  // };
 
-  const findOpenKeys = () => {
-    const openKeys: string[] = [];
-    menuData.forEach(group => {
-      if (group.children) {
-        const activeChild = group.children.find(child => pathname.startsWith(child.link!));
-        if (activeChild) openKeys.push(group.key);
-      }
-    });
-    return openKeys;
-  };
+  // const findOpenKeys = () => {
+  //   const openKeys: string[] = [];
+  //   menuData.forEach(group => {
+  //     if (group.children) {
+  //       const activeChild = group.children.find(child => pathname.startsWith(child.link!));
+  //       if (activeChild) openKeys.push(group.key);
+  //     }
+  //   });
+  //   return openKeys;
+  // };
 
   // Build dropdown items
   const avatarMenu: MenuProps["items"] = [
+    {
+      key: "profile",
+      label: "Profile",
+      icon: <LogoutOutlined />,
+      onClick: logout,
+    },
     {
       key: "logout",
       label: "Logout",
@@ -300,6 +321,38 @@ function LayoutContent({ children }: Props) {
     },
   ];
 
+  // Determine active key and open keys recursively
+  const getMenuState = (menuItems: any[], path: string) => {
+    let activeKey = "";
+    let openKeys: string[] = [];
+
+    const traverse = (items: any[], parents: string[] = []) => {
+      for (let item of items) {
+        if (!item) continue;
+        // Skip dividers
+        if (item.type === "divider") continue;
+
+        // If normal menu item with link matches path
+        if (item.link && path.startsWith(item.link)) {
+          activeKey = item.key;
+          openKeys = [...parents]; // all parent keys should be open
+          return true; // stop traversing
+        }
+
+        // If group or submenu with children, recurse
+        if (item.children) {
+          if (traverse(item.children, [...parents, item.key])) return true;
+        }
+      }
+      return false;
+    };
+
+    traverse(menuItems);
+    return { activeKey, openKeys };
+  };
+
+  const { activeKey, openKeys } = getMenuState(menuData, pathname);
+
   return (
     <Layout style={{ minHeight: "100vh" }}>
       {/* Sidebar */}
@@ -307,43 +360,34 @@ function LayoutContent({ children }: Props) {
         collapsible
         collapsed={collapsed}
         onCollapse={(value) => setCollapsed(value)}
-        breakpoint="lg"          // 👈 auto trigger at large breakpoint
-        collapsedWidth="0"       // 👈 hide completely on small screens
-        trigger={null}   // 👈 disable the default floating trigger
+        breakpoint="lg"
+        collapsedWidth={0}
+        trigger={null}
         width={240}
-      > 
-        <div
-          style={{
-            padding: collapsed ? 8 : 16,
-            textAlign: "center",
-            transition: "all 0.2s ease",
-          }}
-        >
-          <Avatar
-            src="/default-profile.png"
-            size={collapsed ? 40 : 64}
-          />
-
+        style={{ background: "#fff" }} // <-- make sidebar white
+      >
+        <div style={{ padding: collapsed ? 8 : 16, textAlign: "center" }}>
+          <Avatar src="/default-profile.png" size={collapsed ? 40 : 64} />
           {!collapsed && (
-            <Title
-              level={5}
-              style={{
-                color: "white",
-                marginTop: 8,
-                fontSize: 14,
-              }}
-            >
+            <Title level={5} style={{ marginTop: 8, fontSize: 14 }}>
               {user.name}
             </Title>
           )}
         </div>
-        <Divider style={{ marginTop: -10, marginBottom: 0, borderColor: "rgba(0, 195, 255, 0.25)" }} />
+        <Divider style={{ marginTop: -10, marginBottom: 0, borderColor: "rgba(0,195,255,0.25)" }} />
         <Menu
-          theme="dark"
           mode="inline"
-          selectedKeys={[findActiveKey()]}
-          defaultOpenKeys={findOpenKeys()}
+          selectedKeys={[activeKey]}
+          defaultOpenKeys={openKeys}
           items={menuData.map(generateMenuItem).filter(Boolean)}
+          style={{
+            height: 'calc(100vh - 112px)',
+            overflowY: 'auto',
+            background: "#fff",
+            border: "none",
+          }}
+          // Customize icons via CSS
+          className="custom-menu"
         />
       </Sider>
 
@@ -357,28 +401,27 @@ function LayoutContent({ children }: Props) {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
+            flexShrink: 0,
           }}
         >
-          <Button
-            type="text"
-            icon={<MenuOutlined />}
-            onClick={() => setCollapsed(!collapsed)}
-            style={{ fontSize: 18 }}
-          />
-          {/* <Title level={4} style={{ margin: 0 }}>
-            ADDESSA File Manager
-          </Title> */}
-
+          <Button type="text" icon={<MenuOutlined />} onClick={() => setCollapsed(!collapsed)} />
           <Dropdown menu={{ items: avatarMenu }} placement="bottomRight">
             <Button type="text">
-              <Avatar src="/default-profile.png" /> 
-              {/* {user.name} */}
+              <Avatar src="/default-profile.png" />
             </Button>
           </Dropdown>
         </Header>
 
         {/* Main Content */}
-        <Content style={{ margin: 10, background: "#fff", padding: 24 }}>
+        <Content
+          style={{
+            margin: 10,
+            background: "#fff",
+            padding: 24,
+            overflow: "auto",       // <-- make only content scrollable
+            height: "calc(100vh - 40px - 20px)", // 100vh minus header height and margin
+          }}
+        >
           {children}
         </Content>
       </Layout>

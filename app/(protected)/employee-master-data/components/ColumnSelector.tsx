@@ -35,7 +35,7 @@ export default function ColumnSelector({ headers, selectedHeaders, onChange }: C
                 values.includes(h.value)
               );
 
-              setSelectedHeaders(newSelected);
+              onChange(newSelected);
             }}
           />
         </div>

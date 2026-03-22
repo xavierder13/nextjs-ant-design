@@ -2,8 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/axios";
-import { Card, Row, Col, Typography, Input, Space, Button, Grid, Divider } from "antd";
+import { 
+  Card, 
+  Row, 
+  Col, 
+  Typography, 
+  Input, 
+  Space, 
+  Button, 
+  Grid, 
+  Divider, 
+  Form,
+  Breadcrumb,
+} from "antd";
 import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import Link from "next/link";
 
 import ColumnSelector from "./components/ColumnSelector";
 import EmployeeTable from "./components/EmployeeTable";
@@ -63,6 +76,8 @@ const defaultHeaders = headers.slice(0, 8);
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200, 300, 500];
 
 export default function EmployeeListPage() {
+  const [searchForm] = Form.useForm();
+
   const screens = useBreakpoint();
   const isMobile = !screens.md;
   const isSmallScreen = !screens.sm;
@@ -77,13 +92,13 @@ export default function EmployeeListPage() {
   const [editedIndex, setEditedIndex] = useState<number>(-1);
   const [modalTitle, setModalTitle] = useState<string>("New Employee");
 
-  const fetchEmployees = async (page = 1, pageSize = 10) => {
+  const fetchEmployees = async (page = 1, pageSize = 10, searchValue = "") => {
     setLoading(true);
     try {
       const data = {
         page,
         items_per_page: pageSize,
-        search,
+        search: searchValue,
         table_headers: selectedHeaders.map((h) => ({ text: h.title, value: h.value }))
       };
       const res = await api.post("/api/employee_master_data/index", data);
@@ -96,6 +111,13 @@ export default function EmployeeListPage() {
     } finally { setLoading(false); }
   };
 
+  const searchData = async () => {
+    const values = await searchForm.getFieldsValue();
+     const searchValue = values.search || "";
+    setSearch(searchValue); // optional (for UI state)
+    fetchEmployees(1, pagination.pageSize, searchValue); // ✅ pass directly
+  }
+ 
   const saveData = () => {
     console.log('saved data')
   }
@@ -119,6 +141,17 @@ export default function EmployeeListPage() {
 
   return (
     <>
+      <Breadcrumb
+        style={{ margin: "16px 0", marginTop: 0 }}
+        items={[
+          {
+            title: <Link href="/">Home</Link>, // <-- clickable
+          },
+          {
+            title: "Employee Master Data",
+          },
+        ]}
+      />
       <Card
         title={
           <Row gutter={[8, 8]}>
@@ -129,17 +162,19 @@ export default function EmployeeListPage() {
             </Col>
 
             <Col xs={24} md={8}>
-              <Input
-                placeholder="Search..."
-                prefix={<SearchOutlined />}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+              <Form form={searchForm}>
+                <Form.Item name="search" style={{marginBottom: 0}}>
+                   <Input
+                      placeholder="Search..."
+                      prefix={<SearchOutlined />}
+                      onPressEnter={searchData}
+                    />
+                </Form.Item>
+              </Form>
             </Col>
-
             <Col xs={24} md={6}>
               <Space>
-                <Button type="primary" icon={<SearchOutlined />} onClick={() => fetchEmployees(1)}>Search</Button>
+                <Button type="primary" icon={<SearchOutlined />} onClick={() => searchData()}>Search</Button>
                 <Button icon={<ReloadOutlined />} onClick={() => fetchEmployees()}>Refresh</Button>
               </Space>
             </Col>
