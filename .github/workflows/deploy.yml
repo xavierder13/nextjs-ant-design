@@ -48,6 +48,4 @@ jobs:
       run: |
         cd ~/projects/nextjs-ant-design
         git pull origin master
-        npm install
-        npm run build
-        pm2 restart all
+        docker compose up -d --build
