@@ -233,17 +233,20 @@ function LayoutContent({ children }: Props) {
       const children = item.children?.map(generateMenuItem).filter(Boolean);
       if (!children?.length) return null;
 
-      // Wrap group label with icon if exists
-      const labelContent = item.icon
-        ? (
-          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {React.isValidElement(item.icon)
-              ? React.cloneElement(item.icon, { style: { color: "#1890ff" } }) // primary color
-              : item.icon}
-            <span>{item.label}</span>
-          </span>
-        )
-        : item.label;
+      const labelContent = (
+        <span style={{ 
+          display: "flex", 
+          alignItems: "center", 
+          gap: 8, 
+          fontWeight: 600,       // bold
+          color: "#0c3e6d"       // AntD dark blue
+        }}>
+          {item.icon && React.isValidElement(item.icon)
+            ? React.cloneElement(item.icon, { style: { color: "#0c3e6d" } }) // match dark blue
+            : item.icon}
+          <span>{item.label}</span>
+        </span>
+      );
 
       return { type: "group", key: item.key, label: labelContent, children };
     }
@@ -385,7 +388,7 @@ function LayoutContent({ children }: Props) {
             overflowY: 'auto',
             background: "#fff",
             border: "none",
-          }}z
+          }}
         />
       </Sider>
 
@@ -404,7 +407,7 @@ function LayoutContent({ children }: Props) {
         >
           <Button type="text" icon={<MenuOutlined />} onClick={() => setCollapsed(!collapsed)} />
           <Dropdown menu={{ items: avatarMenu }} placement="bottomRight">
-            <Button type="text">
+            <Button type="text" style={{marginRight: "-10px"}}>
               <Avatar src="/default-profile.png" />
             </Button>
           </Dropdown>

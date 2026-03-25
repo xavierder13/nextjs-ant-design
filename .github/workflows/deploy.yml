@@ -1,0 +1,30 @@
+name: Deploy to WSL
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Install SSH client
+      run: sudo dnf install -y openssh-clients
+
+    - name: Setup SSH key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.WSL_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+        chmod 600 ~/.ssh/id_ed25519
+
+    - name: Add WSL host to known_hosts
+      run: ssh-keyscan -H 192.168.181.242 >> ~/.ssh/known_hosts
+
+    - name: Deploy project to WSL
+      run: |
+        ssh xavierder@192.168.181.242 'cd ~/projects/nextjs-ant-design && git pull origin master && npm install && npm run build && pm2 restart all'
