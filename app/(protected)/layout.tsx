@@ -373,8 +373,7 @@ function LayoutContent({ children }: Props) {
           <Avatar src="/default-profile.png" size={collapsed ? 40 : 64} />
           {!collapsed && (
             <Title level={5} style={{ marginTop: 8, fontSize: 14 }}>
-              {/* {user.name} */}
-              xavierdEr
+              {user.name}
             </Title>
           )}
         </div>
