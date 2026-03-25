@@ -1,3 +1,34 @@
+# name: Deploy to WSL
+
+# on:
+#   push:
+#     branches:
+#       - master
+
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#     - name: Checkout code
+#       uses: actions/checkout@v3
+
+#     - name: Install SSH client
+#       run: sudo apt-get update && sudo apt-get install -y openssh-client
+
+#     - name: Setup SSH key
+#       run: |
+#         mkdir -p ~/.ssh
+#         echo "${{ secrets.WSL_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+#         chmod 600 ~/.ssh/id_ed25519
+
+#     - name: Add WSL host to known_hosts
+#       run: ssh-keyscan -H 192.168.181.242 >> ~/.ssh/known_hosts
+
+#     - name: Deploy project to WSL
+#       run: |
+#         ssh xavierder@192.168.181.242 'cd ~/projects/nextjs-ant-design && git pull origin master && npm install && npm run build && pm2 restart all'
+
 name: Deploy to WSL
 
 on:
@@ -7,24 +38,16 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Install SSH client
-      run: sudo apt-get update && sudo apt-get install -y openssh-client
-
-    - name: Setup SSH key
+    - name: Deploy project
       run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.WSL_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-        chmod 600 ~/.ssh/id_ed25519
-
-    - name: Add WSL host to known_hosts
-      run: echo "|1|Nh4rvmCtMiY3V6sUrTYTCu/2aBc=|XHG7lI1PGlc0k0Vsc/vrFXxD7j4= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAII3i/Z7xdy60QIIUsWTRKgfurJF53QzBdyiAuz+g1Mag" >> ~/.ssh/known_hosts
-
-    - name: Deploy project to WSL
-      run: |
-        ssh xavierder@192.168.181.242 'cd ~/projects/nextjs-ant-design && git pull origin master && npm install && npm run build && pm2 restart all'
+        cd ~/projects/nextjs-ant-design
+        git pull origin master
+        npm install
+        npm run build
+        pm2 restart all

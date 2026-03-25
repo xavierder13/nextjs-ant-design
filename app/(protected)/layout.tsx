@@ -374,7 +374,7 @@ function LayoutContent({ children }: Props) {
           {!collapsed && (
             <Title level={5} style={{ marginTop: 8, fontSize: 14 }}>
               {/* {user.name} */}
-              Anokaya
+              Anokayaaaa
             </Title>
           )}
         </div>
