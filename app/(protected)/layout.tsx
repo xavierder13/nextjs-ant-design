@@ -204,7 +204,7 @@ const menuData = [
   },
 ];
 
-// protected layout content based on permission and token
+// protected layout content based on token and user
 export default function ProtectedLayout({ children }: Props) {
   return (
     <AuthProvider>

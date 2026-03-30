@@ -131,9 +131,24 @@ export default function PermissionListPage() {
     }
   }, [modal, editedIndex, permissions, formData]);
 
-  const onSave = () => {
-
+  const onSave = async (data: any) => {
+    // const data = await formData.validateFields(); // ✅ get all form data + validate
+      
+    console.log("Form Values:", data);
     console.log('saved');
+
+    setModal(false);
+
+    // api.post('/api/permission/store', data).then(
+    //   (response) => {
+    //     console.log(response);
+        
+    //   },
+    //   (error) => {
+    //     console.log(error);
+        
+    //   }
+    // )
     
   }
 
@@ -263,13 +278,21 @@ export default function PermissionListPage() {
         destroyOnHidden
         footer={[
           <Button key="cancel" onClick={onCancel}>Cancel</Button>,
-          <Button key="save" type="primary" onClick={onSave}>Save</Button>
+          // <Button key="save" type="primary" onClick={onSave}>Save</Button>
+          <Button
+            key="save"
+            type="primary"
+            onClick={() => formData.submit()} // ✅ triggers validation
+          >
+            Save
+          </Button>
         ]}
       >
         <Form
           form={formData}
           layout="vertical"
           initialValues={permissions[editedIndex]}
+          onFinish={onSave}
         >
           <Form.Item
             label="Permission"
