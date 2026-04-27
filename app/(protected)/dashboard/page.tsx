@@ -5,7 +5,6 @@ import {
   Card,
   Row,
   Col,
-  Statistic,
   Select,
   Button,
   Tag,
@@ -190,18 +189,21 @@ const generateSample = () => {
 // ─── Sub-components ───────────────────────────────────────────
 
 function KpiCard({ icon, label, value, sub, color = PRIMARY, suffix = "" }) {
+  const strLen = String(value).length;
+  const fontSize = strLen > 12 ? 13 : strLen > 8 ? 16 : strLen > 5 ? 18 : 22;
   return (
-    <Card size="small" styles={{ body: { padding: "16px 20px" } }}
+    <Card size="small" styles={{ body: { padding: "12px 16px" } }}
       style={{ borderTop: `3px solid ${color}`, height: "100%" }}>
       <Space orientation="vertical" size={4} style={{ width: "100%" }}>
         <Space size={6}>
-          <span style={{ fontSize: 18 }}>{icon}</span>
-          <Text type="secondary" style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>
+          <span style={{ fontSize: 16 }}>{icon}</span>
+          <Text type="secondary" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>
             {label}
           </Text>
         </Space>
-        <Statistic value={value} suffix={suffix}
-          styles={{ content: { fontSize: 26, fontWeight: 800, lineHeight: 1, color } }} />
+        <div style={{ fontSize, fontWeight: 800, lineHeight: 1.3, color, wordBreak: "break-word" }}>
+          {value}{suffix}
+        </div>
         <Text type="secondary" style={{ fontSize: 11 }}>{sub}</Text>
       </Space>
     </Card>
@@ -267,12 +269,12 @@ function GenderViz({ data }) {
   const genders = [...new Set(data.map((r) => r.gender))].filter((g) => g && g !== "Unknown");
   if (!genders.length) return <Text type="secondary">No gender data available.</Text>;
   return (
-    <Row gutter={12}>
+    <Row gutter={[12, 12]}>
       {genders.map((g, i) => {
         const n = data.filter((r) => r.gender === g).length;
         const h = hired.filter((r) => r.gender === g).length;
         return (
-          <Col key={g} flex={1}>
+          <Col key={g} xs={24} sm={12}>
             <Card size="small" styles={{ body: { textAlign: "center", padding: "14px 10px" } }}>
               <div style={{ fontSize: 22, fontWeight: 800, color: COLORS[i] }}>{n}</div>
               <Text type="secondary" style={{ fontSize: 10 }}>{g} Applicants</Text>
@@ -543,7 +545,7 @@ export default function RecruitmentDashboard() {
   }
 
   return (
-    <div style={{ padding: "24px 28px 40px" }}>
+    <div style={{ padding: "16px 12px 40px" }} className="recruitment-dashboard">
       {/* Status bar */}
       <Row justify="space-between" align="middle" style={{ marginBottom: 20 }}>
         <Space>
@@ -562,7 +564,7 @@ export default function RecruitmentDashboard() {
             { label: "Source", key: "source" },
             { label: "Stage", key: "stage" },
           ].map(({ label, key }) => (
-            <Col key={key} xs={12} sm={8} md={4}>
+            <Col key={key} xs={24} sm={12} md={4}>
               <div style={{ marginBottom: 4 }}>
                 <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</Text>
               </div>
@@ -571,7 +573,7 @@ export default function RecruitmentDashboard() {
                 onChange={(v) => setFilters((f) => ({ ...f, [key]: v || "" }))} />
             </Col>
           ))}
-          <Col xs={12} sm={8} md={4}>
+          <Col xs={24} sm={12} md={4}>
             <div style={{ marginBottom: 4 }}>
               <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Gender</Text>
             </div>
@@ -580,7 +582,7 @@ export default function RecruitmentDashboard() {
               value={filters.gender || undefined}
               onChange={(v) => setFilters((f) => ({ ...f, gender: v || "" }))} />
           </Col>
-          <Col xs={24} sm={8} md={4}>
+          <Col xs={24} sm={12} md={4}>
             <Button icon={<ReloadOutlined />} onClick={resetFilters} block>Reset</Button>
           </Col>
         </Row>
@@ -619,28 +621,28 @@ export default function RecruitmentDashboard() {
 
       {/* KPIs */}
       <Divider titlePlacement="left" style={{ fontSize: 11, color: "#888" }} styles={{ content: { margin: "0 8px 0 0" } }}>KEY PERFORMANCE INDICATORS</Divider>
-      <Row gutter={[14, 14]} style={{ marginBottom: 24 }}>
-        <Col xs={12} sm={8} md={4}>
+      <Row gutter={[12, 12]} style={{ marginBottom: 24 }}>
+        <Col xs={12} sm={12} md={8} lg={4}>
           <KpiCard icon="📥" label="Total Applicants" value={filtered.length} color="#1677ff"
             sub={`${pct(hired.length, filtered.length)}% hire rate`} />
         </Col>
-        <Col xs={12} sm={8} md={4}>
+        <Col xs={12} sm={12} md={8} lg={4}>
           <KpiCard icon="✅" label="Total Hired" value={hired.length} color={PRIMARY}
             sub={`${hired.length} confirmed hires`} />
         </Col>
-        <Col xs={12} sm={8} md={4}>
+        <Col xs={12} sm={12} md={8} lg={4}>
           <KpiCard icon="⏱️" label="Avg Time to Hire" value={avgTTH != null ? avgTTH : "N/A"} suffix={avgTTH != null ? "d" : ""}
             color="#faad14" sub={`${ttArr.length} data points`} />
         </Col>
-        <Col xs={12} sm={8} md={4}>
+        <Col xs={12} sm={12} md={8} lg={4}>
           <KpiCard icon="🎯" label="Offer Acceptance" value={offered.length ? `${pct(accepted, offered.length)}%` : "N/A"}
             color="#13c2c2" sub={`${accepted} of ${offered.length} offers`} />
         </Col>
-        <Col xs={12} sm={8} md={4}>
+        <Col xs={12} sm={12} md={8} lg={4}>
           <KpiCard icon="📣" label="Top Source" value={topSrc ? topSrc[0] : "—"}
             color="#722ed1" sub={topSrc ? `${topSrc[1].length} applicants` : ""} />
         </Col>
-        <Col xs={12} sm={8} md={4}>
+        <Col xs={12} sm={12} md={8} lg={4}>
           <KpiCard icon="⭐" label="Candidate NPS" value={npsArr.length ? `${pct(npsYes, npsArr.length)}%` : "N/A"}
             color={PRIMARY} sub={`${npsArr.length} respondents`} />
         </Col>
@@ -663,7 +665,7 @@ export default function RecruitmentDashboard() {
         </Col>
         <Col xs={24} md={12}>
           <Card title="Avg. Days per Stage" size="small">
-            <div style={{ height: 220 }}>
+            <div style={{ height: "clamp(180px, 30vw, 220px)" }}>
               <Bar data={{
                 labels: ["Screening", "Initial Int.", "Exam", "BG Invest.", "Final Int.", "Orientation"],
                 datasets: [{ label: "Avg Days", data: [6, 8, 10, 14, 12, 7], backgroundColor: COLORS.slice(0, 6), borderRadius: 6, borderSkipped: false }],
@@ -678,14 +680,14 @@ export default function RecruitmentDashboard() {
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} md={12}>
           <Card title="Source of Application" size="small">
-            <div style={{ height: 240 }}>
+            <div style={{ height: "clamp(200px, 35vw, 240px)" }}>
               <Bar data={srcAppData()} options={{ ...CHART_OPTS, indexAxis: "y", plugins: { legend: { display: false } } }} />
             </div>
           </Card>
         </Col>
         <Col xs={24} md={12}>
           <Card title="Hired by Source" size="small">
-            <div style={{ height: 240 }}>
+            <div style={{ height: "clamp(200px, 35vw, 240px)" }}>
               <Doughnut data={srcHireData()} options={{ responsive: true, maintainAspectRatio: false, cutout: "58%",
                 plugins: { legend: { position: "right", labels: { font: { size: 10 }, boxWidth: 9, padding: 6 } } } }} />
             </div>
@@ -698,14 +700,14 @@ export default function RecruitmentDashboard() {
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} md={12}>
           <Card title="Applications & Hires by Month" size="small">
-            <div style={{ height: 230 }}>
+            <div style={{ height: "clamp(200px, 35vw, 230px)" }}>
               <Line data={monthlyData()} options={{ ...CHART_OPTS, plugins: { legend: { labels: { font: { size: 11 }, boxWidth: 10, padding: 12 } } } }} />
             </div>
           </Card>
         </Col>
         <Col xs={24} md={12}>
           <Card title="Age Group Distribution" size="small">
-            <div style={{ height: 230 }}>
+            <div style={{ height: "clamp(200px, 35vw, 230px)" }}>
               <Bar data={ageData()} options={{ ...CHART_OPTS, plugins: { legend: { labels: { font: { size: 11 }, boxWidth: 10, padding: 12 } } } }} />
             </div>
           </Card>
@@ -721,7 +723,7 @@ export default function RecruitmentDashboard() {
         </Col>
         <Col xs={24} md={12}>
           <Card title="Stage Outcome Distribution" size="small">
-            <div style={{ height: 230 }}>
+            <div style={{ height: "clamp(200px, 35vw, 230px)" }}>
               <Bar data={{
                 labels: ["Screening", "Recruitment", "Hiring", "Contract Signing"],
                 datasets: [
