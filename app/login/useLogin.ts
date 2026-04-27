@@ -19,7 +19,7 @@ export function useLogin() {
       if(response.access_token)
       {
         localStorage.setItem("access_token", response.access_token);
-        router.push("/");
+        router.push("/dashboard");
       }
       else
       {

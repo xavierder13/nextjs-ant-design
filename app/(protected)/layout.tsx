@@ -4,14 +4,18 @@ import * as React from "react";
 import Link from "next/link";
 import { useAuth, AuthProvider } from "@/context/AuthContext";
 import { 
+  ConfigProvider,
   Layout,
   Menu, 
   Avatar, 
   Typography, 
   Dropdown, 
   MenuProps, 
-  Button , 
+  Button,
   Divider,
+  Badge,
+  Space,
+  Breadcrumb,
 } from "antd";
 import {
   DashboardOutlined,
@@ -26,339 +30,241 @@ import {
   DollarOutlined,
   FileOutlined,
   LogoutOutlined,
-  MenuOutlined
+  MenuOutlined,
+  BellOutlined,
+  DownOutlined,
+  CheckCircleOutlined,
+  AuditOutlined,
+  SolutionOutlined,
+  StarOutlined
 } from "@ant-design/icons";
 import { usePathname } from "next/navigation";
 
 const { Header, Sider, Content } = Layout;
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 interface Props {
   children?: React.ReactNode;
 }
 
-interface MenuItem {
-  key: string;
-  title: string;
-  icon?: React.ReactNode; //optional '?'
-  link?: string; //optional '?'
-  children?: MenuItem[]; //optional '?'
-  permission?: string; //optional '?'
+// ─── Page title map — add routes as you build them ───────────────────────────
+const titleMap: Record<string, { title: string; breadcrumb: string[] }> = {
+  "/dashboard":                         { title: "Dashboard",            breadcrumb: ["Home", "Dashboard"] },
+  "/hr-payroll/dashboard":              { title: "HR Dashboard",         breadcrumb: ["Human Resource", "Dashboard"] },
+  "/employee-master-data":              { title: "Employee Master Data", breadcrumb: ["Human Resource", "Employee Master Data"] },
+  "/kpi-templates":                     { title: "KPI Template",         breadcrumb: ["KPI Management", "KPI Templates"] },
+  "/recruitment/applicant-list":        { title: "Job Applicants",       breadcrumb: ["Human Resource", "Recruitment", "Job Applicants"] },
+  "/recruitment/screening-list":        { title: "Screening",            breadcrumb: ["Human Resource", "Recruitment", "Screening"] },
+  "/recruitment/initial-interview-list":{ title: "Initial Interview",    breadcrumb: ["Human Resource", "Recruitment", "Initial Interview"] },
+  "/recruitment/iq-test-list":          { title: "Exam",                 breadcrumb: ["Human Resource", "Recruitment", "Exam"] },
+  "/recruitment/final-interview-list":  { title: "Final Interview",      breadcrumb: ["Human Resource", "Recruitment", "Final Interview"] },
+  "/recruitment/orientation-list":      { title: "Orientation",          breadcrumb: ["Human Resource", "Recruitment", "Orientation"] },
+};
+
+function usePageMeta() {
+  const pathname = usePathname();
+  return titleMap[pathname] ?? { title: "", breadcrumb: ["Home"] };
 }
 
-// Example menu data with permissions
-const menuData = [
-  { key: "dashboard", title: "Dashboard", link: "/dashboard", icon: <FileOutlined /> },
-  { type: 'divider' },
-  {  
-    key: 'inventory-group',
-    type: 'group',
-    label: 'Inventory / Purchasing',
-    children: [
-      {
-        key: "inventory",
-        title: "Inventory",
-        icon: <BarcodeOutlined />,
-        children: [
-          { key: "product-list", title: "Product List", link: "/product/index", permissions: ["product-list"] },
-          { key: "inventory-reconciliation", title: "Reconciliation", link: "/inventory/reconciliation", permissions: ["inventory-recon-list"] },
-          { key: "scan-product", title: "Scan Product", link: "/scan_product", permissions: ["product-scan"] },
-          { key: "scanned-product-list", title: "Scanned Product List", link: "/scanned_product_list", permissions: ["product-list-scanned"] },
-          { key: "serial-number-details", title: "Serial Number Details", link: "/serial_number_details", permissions: ["serial-number-details"] },
-          { key: "inventory-on-hand", title: "Inventory On Hand", link: "/inventory_on_hand", permissions: ["inventory-on-hand"] },
-        ],
-      },
-      {
-        key: "item-master",
-        title: "Item Master Data",
-        icon: <DatabaseOutlined />,
-        children: [
-          { key: "brand", title: "Brand", link: "/brand/index", permissions: ["brand-list", "brand-create"] },
-          { key: "product-model", title: "Product Model", link: "/product_model/index", permissions: ["product-model-list", "product-model-create"] },
-          { key: "product-category", title: "Product Category", link: "/product_category/index", permissions: ["product-category-list", "product-category-create"] },
-        ],
-      },
-    ],
-  },
-  { type: 'divider' },
-  // ================= HR / PAYROLL =================
+// ─── Menu data ────────────────────────────────────────────────────────────────
+const menuData: any[] = [
+  { key: "dashboard", title: "Dashboard", link: "/dashboard", icon: <DashboardOutlined /> },
+  { type: "divider" },
   {
-    key: 'hr-group',
-    type: 'group',
-    label: 'HR / Payroll',
+    key: "human-resource",
+    type: "group",
+    label: "Human Resource",
     children: [
-      {
-        key: "hr-dashboard",
-        title: "Dashboard",
-        icon: <DashboardOutlined />,
-        link: "/hr_payroll/dashboard",
-        permissions: ["hr-payroll-dashboard"],
-      },
-      {
-        key: "employee",
-        title: "Employee",
-        icon: <UserOutlined />,
-        children: [
-          { key: "employee-master-data", title: "Master Data", link: "/employee-master-data", permissions: ["employee-master-data-list"] },
-          { key: "employee-reports", title: "Employee Reports", link: "/employee/list", permissions: ["employee-list"] },
-        ],
-      },
+      { 
+        key: "employee-master-data", 
+        title: "Employee Master Data",  
+        icon: <UserOutlined />,  
+        link: "/employee-master-data", 
+        permissions: ["employee-master-data-list"] },
       {
         key: "recruitment",
         title: "Recruitment",
         icon: <TeamOutlined />,
         children: [
-          { key: "job-applicants", title: "Job Applicants", link: "/recruitment/applicant-list", permissions: ["careers-applicant-list"] },
-          { key: "screening", title: "Screening", link: "/recruitment/screening-list", permissions: ["careers-screening-list"] },
-          { key: "initial-interview", title: "Initial Interview", link: "/recruitment/initial-interview-list", permissions: ["careers-initial-interview-list"] },
-          { key: "exam", title: "Exam", link: "/recruitment/iq-test-list", permissions: ["careers-iq-test-list"] },
-          { key: "final-interview", title: "Final Interview", link: "/recruitment/final-interview-list", permissions: ["careers-final-interview-list"] },
-          { key: "orientation", title: "Orientation", link: "/recruitment/orientation-list", permissions: ["careers-orientation-list"] },
+          { key: "job-applicants",      title: "Job Applicants",    link: "/recruitment/applicant-list",         permissions: ["careers-applicant-list"] },
+          { key: "screening",           title: "Screening",         link: "/recruitment/screening-list",         permissions: ["careers-screening-list"] },
+          { key: "initial-interview",   title: "Initial Interview", link: "/recruitment/initial-interview-list", permissions: ["careers-initial-interview-list"] },
+          { key: "exam",                title: "Exam",              link: "/recruitment/iq-test-list",           permissions: ["careers-iq-test-list"] },
+          { key: "final-interview",     title: "Final Interview",   link: "/recruitment/final-interview-list",   permissions: ["careers-final-interview-list"] },
+          { key: "orientation",         title: "Orientation",       link: "/recruitment/orientation-list",       permissions: ["careers-orientation-list"] },
         ],
       },
     ],
   },
-  { type: 'divider' },
-  // ================= INFORMATION SYSTEM =================
+  { type: "divider" },
   {
-    key: 'info-system-group',
-    type: 'group',
-    label: 'Information System',
+    key: "kpi",
+    type: "group",
+    label: "KPI Management",
     children: [
-      {
-        key: "email",
-        title: "Email",
-        icon: <MailOutlined />,
-        children: [
-          { key: "email-request", title: "Requests", link: "/email/request", permissions: ["email-list", "email-create"] },
-          { key: "email-verification", title: "For Verification", link: "/email/verification", permissions: ["email-list", "email-manage-edit"] },
-          { key: "email-approval", title: "For Approval", link: "/email/approval", permissions: ["email-approve_deny", "email-manage-edit"] },
-          { key: "email-approved", title: "Approved Requests", link: "/email/approved", permissions: ["email-list"] },
-        ],
+      { 
+        key: "kpi-templates", 
+        title: "KPI Template",       
+        icon: <SolutionOutlined />,   
+        link: "/kpi-templates",  
+        permissions: ["role-list", "role-create"] 
+      },
+      { 
+        key: "employee-evaluations", 
+        title: "Employee Evaluation", 
+        icon: <StarOutlined />,
+        link: "/employee-evaluations", 
+        permissions: ["permission-list", "permission-create"] 
       },
     ],
   },
-  { type: 'divider' },
-  // ================= SETUP & AUTH =================
+  { type: "divider" },
   {
-    key: 'setup-group',
-    type: 'group',
-    label: 'Set Up & Authorizations',
+    key: "setup-group",
+    type: "group",
+    label: "Set Up & Authorizations",
     children: [
       {
         key: "user-management",
         title: "User Management",
         icon: <UserOutlined />,
         children: [
-          { key: "user-list", title: "User Accounts", link: "/users", permissions: ["user-list"] },
-          { key: "user-create", title: "Create New", link: "/user/create", permissions: ["user-create"] },
+          { key: "user-list",   title: "User Accounts", link: "/users",       permissions: ["user-list"] },
+          { key: "user-create", title: "Create New",    link: "/user/create", permissions: ["user-create"] },
         ],
       },
-      {
-        key: "roles",
-        title: "Role",
-        icon: <TeamOutlined />,
-        link: "/role/index",
-        permissions: ["role-list", "role-create"],
-      },
-      {
-        key: "permissions",
-        title: "Permission",
-        icon: <SettingOutlined />,
-        link: "/permissions",
-        permissions: ["permission-list", "permission-create"],
-      },
-    ],
-  },
-  { type: 'divider' },
-  // ================= SAP =================
-  {
-    key: 'sap-group',
-    type: 'group',
-    label: 'SAP Business One',
-    children: [
-      {
-        key: "sap-financials",
-        title: "Financials",
-        icon: <DollarOutlined />,
-        children: [
-          { key: "sap-account-balance", title: "Account Balance", link: "/sap_business_one/account_balance", permissions: ["sap-account-balance"] },
-          { key: "sap-journal-entry", title: "Journal Entry", link: "/sap_business_one/journal_entry", permissions: ["sap-journal-entry"] },
-        ],
-      },
-      {
-        key: "sap-database",
-        title: "SAP Database",
-        icon: <DatabaseOutlined />,
-        link: "/sap_database/index",
-        permissions: ["sap-database-list", "sap-database-create"],
-      },
-      {
-        key: "sync-item-master",
-        title: "Sync Item Master Data",
-        icon: <SyncOutlined />,
-        method: "confirmSyncItemMasterData",
-        permissions: ["sap-database-list", "sap-database-create"],
-      },
+      { key: "roles",       title: "Role",       icon: <TeamOutlined />,   link: "/role/index",  permissions: ["role-list", "role-create"] },
+      { key: "permissions", title: "Permission", icon: <SettingOutlined />,link: "/permissions", permissions: ["permission-list", "permission-create"] },
     ],
   },
 ];
 
-// protected layout content based on token and user
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function getMenuState(menuItems: any[], path: string) {
+  let activeKey = "";
+  let openKeys: string[] = [];
+
+  const traverse = (items: any[], parents: string[] = []): boolean => {
+    for (const item of items) {
+      if (!item || item.type === "divider") continue;
+      if (item.link && (path === item.link || path.startsWith(item.link + "/"))) {
+        activeKey = item.key;
+        openKeys = [...parents];
+        return true;
+      }
+      if (item.children && traverse(item.children, [...parents, item.key])) return true;
+    }
+    return false;
+  };
+
+  traverse(menuItems);
+  return { activeKey, openKeys };
+}
+
+// ─── Root export ──────────────────────────────────────────────────────────────
 export default function ProtectedLayout({ children }: Props) {
   return (
-    <AuthProvider>
-      <LayoutContent>{children}</LayoutContent>
-    </AuthProvider>
+    <ConfigProvider
+      theme={{
+        token: {
+          colorPrimary: "#389e0d",
+          colorLink: "#389e0d",
+          colorLinkHover: "#1a4d0f",
+        },
+      }}
+    >
+      <AuthProvider>
+        <LayoutContent>{children}</LayoutContent>
+      </AuthProvider>
+    </ConfigProvider>
   );
 }
 
+// ─── Inner layout ─────────────────────────────────────────────────────────────
 function LayoutContent({ children }: Props) {
   const pathname = usePathname();
   const { user, hasPermission, logout, loading } = useAuth();
   const [collapsed, setCollapsed] = React.useState(false);
-  
+  const { title: pageTitle, breadcrumb } = usePageMeta();
+
   if (loading) return <p>Loading...</p>;
   if (!user) return null;
 
-    // Build Menu Items with permissions
+  const { activeKey, openKeys } = getMenuState(menuData, pathname);
+
+  // ── Menu item generator ────────────────────────────────────────────────────
   const generateMenuItem = (item: any): any => {
     if (!item) return null;
 
-    // Divider
     if (item.type === "divider") return { type: "divider" };
 
-    // Group
     if (item.type === "group") {
       const children = item.children?.map(generateMenuItem).filter(Boolean);
       if (!children?.length) return null;
-
-      const labelContent = (
-        <span style={{ 
-          display: "flex", 
-          alignItems: "center", 
-          gap: 8, 
-          fontWeight: 600,       // bold
-          color: "#0c3e6d"       // AntD dark blue
-        }}>
-          {item.icon && React.isValidElement(item.icon)
-            ? React.cloneElement(item.icon, { style: { color: "#0c3e6d" } }) // match dark blue
-            : item.icon}
-          <span>{item.label}</span>
-        </span>
-      );
-
-      return { type: "group", key: item.key, label: labelContent, children };
+      return {
+        type: "group",
+        key: item.key,
+        label: (
+          <span style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 600, color: "#1a4d0f" }}>
+            {item.icon && React.isValidElement(item.icon)
+              ? React.cloneElement(item.icon as React.ReactElement, { style: { color: "#1a4d0f" } })
+              : item.icon}
+            <span>{item.label}</span>
+          </span>
+        ),
+        children,
+      };
     }
 
-    // Permission check
     if (item.permission && !hasPermission(item.permission)) return null;
     if (item.permissions && !item.permissions.some((p: string) => hasPermission(p))) return null;
 
-    // Submenu
     if (item.children) {
       const children = item.children.map(generateMenuItem).filter(Boolean);
       if (!children.length) return null;
-
       return {
         key: item.key,
         icon: React.isValidElement(item.icon)
-          ? React.cloneElement(item.icon, { style: { color: "#1890ff" } }) // primary color
+          ? React.cloneElement(item.icon as React.ReactElement, { style: { color: "#389e0d" } })
           : item.icon,
         label: item.title,
         children,
       };
     }
 
-    // Normal menu item with icon color control
     const isActive = item.key === activeKey;
-
     return {
       key: item.key,
       label: item.link ? <Link href={item.link}>{item.title}</Link> : item.title,
       icon: React.isValidElement(item.icon)
         ? React.cloneElement(item.icon as React.ReactElement, {
-            style: { color: isActive ? undefined : "#1890ff" }, // primary color if inactive
+            style: { color: isActive ? undefined : "#389e0d" },
           })
         : item.icon,
     };
   };
 
-      
-  // Determine active menu key based on pathname
-  // const findActiveKey = () => {
-  //   for (let item of menuData) {
-  //     if (item.link && pathname.startsWith(item.link)) return item.key;
-  //     if (item.children) {
-  //       const child = item.children.find(c => pathname.startsWith(c.link!));
-  //       if (child) return child.key;
-  //     }
-  //   }
-  //   return "";
-  // };
-
-  // const findOpenKeys = () => {
-  //   const openKeys: string[] = [];
-  //   menuData.forEach(group => {
-  //     if (group.children) {
-  //       const activeChild = group.children.find(child => pathname.startsWith(child.link!));
-  //       if (activeChild) openKeys.push(group.key);
-  //     }
-  //   });
-  //   return openKeys;
-  // };
-
-  // Build dropdown items
+  // ── Avatar dropdown ────────────────────────────────────────────────────────
   const avatarMenu: MenuProps["items"] = [
-    {
-      key: "profile",
-      label: "Profile",
-      icon: <LogoutOutlined />,
-      onClick: logout,
-    },
-    {
-      key: "logout",
-      label: "Logout",
-      icon: <LogoutOutlined />,
-      onClick: logout,
-    },
+    { key: "profile", label: "Profile", icon: <UserOutlined />,   onClick: () => {} },
+    { type: "divider" },
+    { key: "logout",  label: "Logout",  icon: <LogoutOutlined />, onClick: logout },
   ];
 
-  // Determine active key and open keys recursively
-  const getMenuState = (menuItems: any[], path: string) => {
-    let activeKey = "";
-    let openKeys: string[] = [];
-
-    const traverse = (items: any[], parents: string[] = []) => {
-      for (let item of items) {
-        if (!item) continue;
-        // Skip dividers
-        if (item.type === "divider") continue;
-
-        // If normal menu item with link matches path
-        if (item.link && path.startsWith(item.link)) {
-          activeKey = item.key;
-          openKeys = [...parents]; // all parent keys should be open
-          return true; // stop traversing
-        }
-
-        // If group or submenu with children, recurse
-        if (item.children) {
-          if (traverse(item.children, [...parents, item.key])) return true;
-        }
-      }
-      return false;
-    };
-
-    traverse(menuItems);
-    return { activeKey, openKeys };
-  };
-
-  const { activeKey, openKeys } = getMenuState(menuData, pathname);
+  // ── Breadcrumb items ───────────────────────────────────────────────────────
+  const breadcrumbItems = breadcrumb.map((segment, i) => ({
+    title:
+      i < breadcrumb.length - 1 ? (
+        <span style={{ color: "#8c8c8c" }}>{segment}</span>
+      ) : (
+        <span style={{ color: "#389e0d" }}>{segment}</span>
+      ),
+  }));
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
-      {/* Sidebar */}
+
+      {/* ── Sidebar ──────────────────────────────────────────────────────────── */}
       <Sider
         collapsible
         collapsed={collapsed}
@@ -367,7 +273,7 @@ function LayoutContent({ children }: Props) {
         collapsedWidth={0}
         trigger={null}
         width={240}
-        style={{ background: "#fff" }} // <-- make sidebar white
+        style={{ background: "#fff", boxShadow: "2px 0 8px rgba(56, 158, 13, 0.12)"  }}
       >
         <div style={{ padding: collapsed ? 8 : 16, textAlign: "center" }}>
           <Avatar src="/default-profile.png" size={collapsed ? 40 : 64} />
@@ -377,15 +283,17 @@ function LayoutContent({ children }: Props) {
             </Title>
           )}
         </div>
-        <Divider style={{ marginTop: -10, marginBottom: 0, borderColor: "rgba(0,195,255,0.25)" }} />
+
+        <Divider style={{ marginTop: -10, marginBottom: 0, borderColor: "#00c3ff40" }} />
+
         <Menu
           mode="inline"
           selectedKeys={[activeKey]}
           defaultOpenKeys={openKeys}
           items={menuData.map(generateMenuItem).filter(Boolean)}
           style={{
-            height: 'calc(100vh - 112px)',
-            overflowY: 'auto',
+            height: "calc(100vh - 112px)",
+            overflowY: "auto",
             background: "#fff",
             border: "none",
           }}
@@ -393,38 +301,109 @@ function LayoutContent({ children }: Props) {
       </Sider>
 
       <Layout>
-        {/* Header */}
+
+        {/* ── Header — Option B ────────────────────────────────────────────── */}
         <Header
           style={{
-            height: 40,
+            height: 52,
             padding: "0 16px",
             background: "#fff",
+            borderBottom: "2px solid #389e0d",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
             flexShrink: 0,
           }}
         >
-          <Button type="text" icon={<MenuOutlined />} onClick={() => setCollapsed(!collapsed)} />
-          <Dropdown menu={{ items: avatarMenu }} placement="bottomRight">
-            <Button type="text" style={{marginRight: "-10px"}}>
-              <Avatar src="/default-profile.png" />
-            </Button>
-          </Dropdown>
+          {/* Left: hamburger + page title + breadcrumb */}
+          <Space align="center" size={12}>
+            <Button
+              type="text"
+              icon={<MenuOutlined style={{ color: "#389e0d" }} />}
+              onClick={() => setCollapsed(!collapsed)}
+              style={{
+                background: "#f6ffed",
+                border: "0.5px solid #d9f7be",
+                borderRadius: 6,
+                width: 34,
+                height: 34,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginLeft: -5
+              }}
+            />
+            <div>
+              <Text strong style={{ fontSize: 14, color: "#1a4d0f", display: "block", lineHeight: 1.3 }}>
+                {pageTitle}
+              </Text>
+            </div>
+          </Space>
+
+          {/* Right: bell + user chip */}
+          <Space align="center" size={10}>
+            <Badge count={0} size="small">
+              <Button
+                type="text"
+                icon={<BellOutlined style={{ color: "#389e0d", fontSize: 16 }} />}
+                style={{
+                  background: "#f6ffed",
+                  border: "0.5px solid #d9f7be",
+                  borderRadius: 6,
+                  width: 34,
+                  height: 34,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              />
+            </Badge>
+
+            <Dropdown menu={{ items: avatarMenu }} placement="bottomRight" trigger={["click"]}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  cursor: "pointer",
+                  padding: "4px 10px 4px 4px",
+                  borderRadius: 8,
+                  border: "0.5px solid #d9f7be",
+                  background: "#fff",
+                  transition: "background 0.15s",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#f6ffed")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "#fff")}
+              >
+                <Avatar
+                  src="/default-profile.png"
+                  size={28}
+                  style={{ background: "#d9f7be", color: "#276221", fontSize: 11, fontWeight: 600 }}
+                />
+                <div style={{ lineHeight: 1.3 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: "#1a4d0f" }}>{user.name}</div>
+                  <div style={{ fontSize: 11, color: "#8c8c8c" }}>{(user as any).role ?? "User"}</div>
+                </div>
+                <DownOutlined style={{ fontSize: 10, color: "#8c8c8c", marginLeft: 2 }} />
+              </div>
+            </Dropdown>
+          </Space>
         </Header>
 
-        {/* Main Content */}
+        {/* ── Main content ─────────────────────────────────────────────────── */}
         <Content
           style={{
             margin: 10,
             background: "#fff",
             padding: 24,
-            overflow: "auto",       // <-- make only content scrollable
-            height: "calc(100vh - 40px - 20px)", // 100vh minus header height and margin
+            borderRadius: 8,
+            overflow: "auto",
+            height: "calc(100vh - 52px - 20px)",
           }}
         >
           {children}
         </Content>
+
       </Layout>
     </Layout>
   );

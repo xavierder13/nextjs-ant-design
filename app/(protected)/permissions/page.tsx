@@ -29,10 +29,12 @@ import {
   DeleteOutlined,
   CloseOutlined 
 } from "@ant-design/icons";
+import { useAuth } from "@/context/AuthContext";
 
 const { useBreakpoint } = Grid;
 
 export default function PermissionListPage() {
+  const { hasPermission } = useAuth();
   const [formData] = Form.useForm();
   const [searchForm] = Form.useForm();
   const [permissions, setPermissions] = useState<any[]>([]);
@@ -67,14 +69,22 @@ export default function PermissionListPage() {
       key: "actions",
       render: (_: any, record: any) => (
         <Space>
-          <Tooltip title="Edit">
-            <Button color="green" variant="outlined" icon={<EditOutlined />} onClick={() => editData(record)} />
-          </Tooltip>
-          <Popconfirm title="Delete employee?" onConfirm={() => onDelete(record.id)}>
-            <Tooltip title="Delete">
-              <Button danger icon={<DeleteOutlined />} />
+          { //if hasPermission
+            hasPermission('permission-edit') &&
+  
+            <Tooltip title="Edit">
+              <Button color="green" variant="outlined" icon={<EditOutlined />} onClick={() => editData(record)} />
             </Tooltip>
-          </Popconfirm>
+          }
+          
+          { //if hasPermission
+            hasPermission('permission-delete') &&
+            <Popconfirm title="Delete employee?" onConfirm={() => onDelete(record.id)}>
+              <Tooltip title="Delete">
+                <Button danger icon={<DeleteOutlined />} />
+              </Tooltip>
+            </Popconfirm>
+          }
         </Space>
       )
     }
@@ -94,6 +104,7 @@ export default function PermissionListPage() {
       console.error(err);
       message.error("Failed to fetch permissions");
     } finally {
+      
       setLoading(false);
     }
   };
@@ -157,7 +168,6 @@ export default function PermissionListPage() {
     console.log('cancelled');
     
   }
-
 
   const onDelete = async (id: number) => {
 

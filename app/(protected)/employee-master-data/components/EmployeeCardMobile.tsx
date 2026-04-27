@@ -2,6 +2,7 @@
 
 import { Card, Space, Button, Divider, Checkbox, Tooltip, Popconfirm, Typography } from "antd";
 import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { useAuth } from "@/context/AuthContext";
 
 interface EmployeeCardMobileProps {
   employees: any[];
@@ -18,6 +19,9 @@ export default function EmployeeCardMobile({
   setSelectedRowKeys,
   onDelete
 }: EmployeeCardMobileProps) {
+
+  const { hasPermission } = useAuth();
+
   return (
     <>
       {employees.map((emp) => (
@@ -45,14 +49,22 @@ export default function EmployeeCardMobile({
 
           <Divider />
           <Space>
-            <Tooltip title="Edit">
-              <Button color="green" variant="outlined" icon={<EditOutlined />} />
-            </Tooltip>
-            <Popconfirm title="Delete this employee?" onConfirm={() => onDelete(emp.id)}>
-              <Tooltip title="Delete">
-                <Button danger icon={<DeleteOutlined />} />
+            {//if has permission
+              hasPermission('employee-master-data-edit') &&
+              <Tooltip title="Edit">
+                <Button color="green" variant="outlined" icon={<EditOutlined />} />
               </Tooltip>
-            </Popconfirm>
+            }
+            
+            {//if has permission
+              hasPermission('employee-master-data-delete') &&
+              <Popconfirm title="Delete this employee?" onConfirm={() => onDelete(emp.id)}>
+                <Tooltip title="Delete">
+                  <Button danger icon={<DeleteOutlined />} />
+                </Tooltip>
+              </Popconfirm>
+            }
+            
           </Space>
         </Card>
       ))}
