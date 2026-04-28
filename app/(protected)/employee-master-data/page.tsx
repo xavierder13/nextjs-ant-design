@@ -15,7 +15,11 @@ import {
   Form,
   Breadcrumb,
 } from "antd";
-import { ReloadOutlined, SearchOutlined } from "@ant-design/icons";
+import { 
+  ReloadOutlined,
+  SearchOutlined,
+  PlusOutlined, 
+} from "@ant-design/icons";
 import Link from "next/link";
 
 import ColumnSelector from "./components/ColumnSelector";
@@ -111,6 +115,12 @@ export default function EmployeeListPage() {
     } finally { setLoading(false); }
   };
 
+  const handleAdd = () => {
+    setEditedIndex(-1);
+    setModalTitle("Add Employee");
+    setModal(true);
+  }
+
   const searchData = async () => {
     const values = await searchForm.getFieldsValue();
      const searchValue = values.search || "";
@@ -154,31 +164,60 @@ export default function EmployeeListPage() {
       />
       <Card
         title={
-          <Row gutter={[8, 8]}>
-            <Col xs={24} md={6}>
-              <Typography.Title level={4} style={{ margin: 0 }}>
-                Employee Master Data
-              </Typography.Title>
-            </Col>
+          <Row gutter={[8, 8]} align="middle">
+          {/* TITLE */}
+          <Col xs={24} md={6}>
+            <Typography.Title level={4} style={{ margin: 0 }}>
+              Employee Master Data
+            </Typography.Title>
+          </Col>
 
-            <Col xs={24} md={8}>
-              <Form form={searchForm}>
-                <Form.Item name="search" style={{marginBottom: 0}}>
-                   <Input
-                      placeholder="Search..."
-                      prefix={<SearchOutlined />}
-                      onPressEnter={searchData}
-                    />
-                </Form.Item>
-              </Form>
-            </Col>
-            <Col xs={24} md={6}>
-              <Space>
-                <Button type="primary" icon={<SearchOutlined />} onClick={() => searchData()}>Search</Button>
-                <Button icon={<ReloadOutlined />} onClick={() => fetchEmployees()}>Refresh</Button>
-              </Space>
-            </Col>
-          </Row>
+          {/* SEARCH INPUT */}
+          <Col xs={24} md={8}>
+            <Form form={searchForm}>
+              <Form.Item name="search" style={{ marginBottom: 0 }}>
+                <Input
+                  placeholder="Search..."
+                  prefix={<SearchOutlined />}
+                  onPressEnter={searchData}
+                />
+              </Form.Item>
+            </Form>
+          </Col>
+
+          {/* EXISTING BUTTONS (UNCHANGED POSITION) */}
+          <Col xs={24} md={6}>
+            <Space wrap>
+              <Button
+                color="primary"
+                variant="outlined"
+                icon={<SearchOutlined />}
+                onClick={searchData}
+              >
+                Search
+              </Button>
+
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={fetchEmployees}
+              >
+                Refresh
+              </Button>
+            </Space>
+          </Col>
+
+          {/* NEW ADD BUTTON (FAR RIGHT) */}
+          <Col xs={24} md={4} style={{ textAlign: "right" }}>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={handleAdd}
+              block={false}
+            >
+              Add Employee
+            </Button>
+          </Col>
+        </Row>
         }
         styles={{
           header: isMobile
