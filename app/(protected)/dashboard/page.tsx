@@ -1,337 +1,392 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import {
-  Card,
-  Row,
-  Col,
-  Select,
-  Button,
-  Tag,
-  Table,
-  Upload,
-  Typography,
-  Space,
-  Progress,
-  Tooltip,
-  Badge,
-  Divider,
-  Alert,
+  useEffect, useState, useCallback, useRef, useMemo,
+} from "react";
+import { useRouter } from "next/navigation";
+import { api } from "@/lib/axios";
+import {
+  Breadcrumb, Row, Col, Card, Divider, Skeleton, Typography,
+  Input, Progress, Select, Button, Tag, Table, Tooltip, Spin,
+  Alert, DatePicker,
 } from "antd";
-import { UploadOutlined, ReloadOutlined } from "@ant-design/icons";
-import * as XLSX from "xlsx";
+import {
+  UserOutlined, FileTextOutlined, AlertOutlined,
+  CalendarOutlined, SearchOutlined, ReloadOutlined,
+  CheckCircleOutlined, InfoCircleOutlined, WarningOutlined,
+} from "@ant-design/icons";
 import {
   Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  ArcElement,
-  Tooltip as CJTooltip,
-  Legend,
-  Filler,
+  ArcElement, BarElement, LineElement, PointElement,
+  CategoryScale, LinearScale, Legend,
+  Tooltip as ChartTooltip,
 } from "chart.js";
-import { Bar, Line, Doughnut } from "react-chartjs-2";
+import { Doughnut, Bar, Line } from "react-chartjs-2";
+import dayjs from "dayjs";
 
 ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  ArcElement,
-  CJTooltip,
-  Legend,
-  Filler
+  ArcElement, BarElement, LineElement, PointElement,
+  CategoryScale, LinearScale, Legend, ChartTooltip,
 );
 
-const { Title, Text } = Typography;
-const { Dragger } = Upload;
+const { Text, Title } = Typography;
+const { RangePicker } = DatePicker;
 
-// ─── Constants ────────────────────────────────────────────────
-const STAGES = [
-  "Screening",
-  "Reserved Applicant",
-  "Initial Interview",
-  "Exam",
-  "Background Investigation",
-  "Final Interview",
-  "Orientation",
-  "Hired",
-];
-const AGE_BANDS = ["18-25", "26-30", "31-35", "36-40", "41-45", "46-50", "51+"];
-const PRIMARY = "#389e0d";
-const COLORS = [
-  "#389e0d",
-  "#52c41a",
-  "#1677ff",
-  "#faad14",
-  "#f5222d",
-  "#722ed1",
-  "#13c2c2",
-  "#fa8c16",
-  "#eb2f96",
-  "#2f54eb",
-  "#a0d911",
+/* ─────────────────────────────────────────────────────────────────
+   CONSTANTS  (mirrors Vue data constants)
+───────────────────────────────────────────────────────────────── */
+const RECRUITMENT_STAGES = [
+  "Screening", "Reserved Applicant", "Initial Interview", "Exam",
+  "B.I & Basic Req", "Final Interview", "Orientation", "Hired",
 ];
 
+const AGE_BAND_LABELS = ["18-25", "26-30", "31-35", "36-40", "41-45", "46-50", "51+"];
+
+const PRIMARY_GREEN = "#389e0d";
+
+const STAGE_COLORS = [
+  "#FB8C00", "#9C27B0", "#009688", "#CDDC39",
+  "#00BCD4", "#607D8B", "#4CAF50", "#1677ff",
+];
+
+const CHART_COLORS = [
+  "#389e0d", "#1677ff", "#faad14", "#f5222d",
+  "#722ed1", "#13c2c2", "#fa8c16", "#eb2f96",
+  "#2f54eb", "#a0d911", "#52c41a",
+];
+
+const STAGE_VUETIFY_COLOR_MAP = {
+  "Screening":         "#FB8C00",
+  "Initial Interview": "#9C27B0",
+  "Exam":              "#009688",
+  "B.I & Basic Req":   "#CDDC39",
+  "Final Interview":   "#00BCD4",
+  "Orientation":       "#607D8B",
+  "Hired":             "#4CAF50",
+};
+
+/* ─────────────────────────────────────────────────────────────────
+   UTILITY FUNCTIONS  (mirrors Vue methods / script helpers)
+───────────────────────────────────────────────────────────────── */
+const groupByKey = (arr, key) =>
+  arr.reduce((acc, r) => {
+    (acc[r[key]] = acc[r[key]] || []).push(r);
+    return acc;
+  }, {});
+
+const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
+
+const getAgeBand = (age) => {
+  if (!age) return "Unknown";
+  if (age <= 25) return "18-25";
+  if (age <= 30) return "26-30";
+  if (age <= 35) return "31-35";
+  if (age <= 40) return "36-40";
+  if (age <= 45) return "41-45";
+  if (age <= 50) return "46-50";
+  return "51+";
+};
+
+const parseDateValue = (v) => {
+  if (!v) return null;
+  if (v instanceof Date) return isNaN(v) ? null : v;
+  if (typeof v === "number") return new Date(Math.round((v - 25569) * 86400000));
+  if (typeof v === "string" && v.trim()) {
+    const mmddyyyy = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (mmddyyyy) return new Date(+mmddyyyy[3], +mmddyyyy[1] - 1, +mmddyyyy[2]);
+    const d = new Date(v);
+    return isNaN(d) ? null : d;
+  }
+  return null;
+};
+
+const daysBetween = (a, b) => {
+  if (!a || !b) return null;
+  const diff = Math.round((b - a) / 86400000);
+  return diff >= 0 ? diff : null;
+};
+
+const getTodayIso = () => {
+  const n = new Date();
+  return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`;
+};
+
+const getJanFirstThisYearIso = () => `${new Date().getFullYear()}-01-01`;
+
+const normalizeProgressStatusToStage = (progressStatus) => {
+  if (!progressStatus) return "Screening";
+  const s = progressStatus.toLowerCase();
+  if (s.includes("hired"))                              return "Hired";
+  if (s.includes("orientation"))                        return "Orientation";
+  if (s.includes("final interview"))                    return "Final Interview";
+  if (s.includes("b.i") || s.includes("basic req"))    return "B.I & Basic Req";
+  if (s.includes("exam"))                               return "Exam";
+  if (s.includes("initial interview"))                  return "Initial Interview";
+  if (s.includes("reserved"))                           return "Reserved Applicant";
+  return "Screening";
+};
+
+/* mirrors normalizeApiApplicantRow() */
+const normalizeApiApplicantRow = (apiRow) => {
+  const dateApplied     = parseDateValue(apiRow.date_applied || apiRow.created_at || null);
+  const dateScreening   = parseDateValue(apiRow.screening_date);
+  const dateInitial     = parseDateValue(apiRow.initial_interview_date);
+  const dateIq          = parseDateValue(apiRow.iq_date);
+  const dateBi          = parseDateValue(apiRow.bi_date);
+  const dateFinal       = parseDateValue(apiRow.final_interview_date);
+  const dateOrientation = parseDateValue(apiRow.orientation_date);
+  const dateContract    = parseDateValue(apiRow.signing_of_contract_date);
+
+  const isHired    = Number(apiRow.orientation_status) === 1 && !!apiRow.signing_of_contract_date;
+  const dateHired  = isHired ? dateContract : null;
+  const daysToHire = dateApplied && dateHired
+    ? Math.round((dateHired - dateApplied) / 86400000) : null;
+  const age = parseInt(apiRow.age) || null;
+  const recruitmentStage = isHired
+    ? "Hired" : normalizeProgressStatusToStage(apiRow.progress_status);
+
+  return {
+    applicantName:          String(apiRow.name || ""),
+    dateApplied,
+    dateHired,
+    dateScreening,
+    dateInitial,
+    dateIq,
+    dateBi,
+    dateFinal,
+    dateOrientation,
+    dateContract,
+    orientationContractGap: daysBetween(dateOrientation, dateContract),
+    applicationSource:      String(apiRow.how_learn || "Others"),
+    appliedPosition:        String(apiRow.position_name || "Unknown"),
+    appliedBranch:          String(apiRow.branch_applied || apiRow.branch_name || "Unknown"),
+    applicantGender:        String(apiRow.gender || "Unknown"),
+    applicantAge:           age,
+    applicantAgeBand:       getAgeBand(age),
+    recruitmentStage,
+    rawProgressStatus:      String(apiRow.progress_status || ""),
+    isHired:                recruitmentStage === "Hired",
+    daysToHire,
+    educAttain:             String(apiRow.educ_attain || "Unknown"),
+    civilStatus:            String(apiRow.civil_status || "Unknown"),
+    employmentPosition:     String(apiRow.employment_position || ""),
+    employmentBranch:       String(apiRow.employment_branch || ""),
+    positionPreference:     String(apiRow.position_preference || ""),
+    branchPreference:       String(apiRow.branch_preference || ""),
+    hiringOfficerName:      String(apiRow.hiring_officer_name || ""),
+    hiringOfficerPosition:  String(apiRow.hiring_officer_position || ""),
+    iqStatus:               apiRow.iq_status,
+  };
+};
+
+const getRankColor = (rank) =>
+  rank === 1 ? "#faad14" : rank === 2 ? "#1677ff" : rank === 3 ? "#722ed1" : "#888";
+
+const conversionColor = (current, previous) => {
+  const rate = pct(current, previous);
+  if (rate >= 70) return "success";
+  if (rate >= 40) return "warning";
+  return "error";
+};
+
+/* ─────────────────────────────────────────────────────────────────
+   CHART DEFAULT OPTIONS
+───────────────────────────────────────────────────────────────── */
 const CHART_OPTS = {
   responsive: true,
   maintainAspectRatio: false,
-  plugins: { legend: { display: false } },
+  plugins: {
+    legend: { display: false },
+    tooltip: { enabled: true },
+  },
   scales: {
-    x: { grid: { display: false }, ticks: { color: "#888", font: { size: 11 } } },
-    y: { grid: { color: "rgba(0,0,0,0.06)" }, ticks: { color: "#888", font: { size: 11 } } },
+    x: { grid: { display: false }, ticks: { color: "#888", font: { size: 10 } } },
+    y: { ticks: { color: "#888", font: { size: 10 } } },
   },
 };
 
-// ─── Helpers ──────────────────────────────────────────────────
-const groupBy = (arr, key) =>
-  arr.reduce((acc, r) => { (acc[r[key]] = acc[r[key]] || []).push(r); return acc; }, {});
-const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
-const ageBand = (a) => {
-  if (!a) return "Unknown";
-  if (a <= 25) return "18-25";
-  if (a <= 30) return "26-30";
-  if (a <= 35) return "31-35";
-  if (a <= 40) return "36-40";
-  if (a <= 45) return "41-45";
-  if (a <= 50) return "46-50";
-  return "51+";
-};
-const toDate = (v) => {
-  if (!v) return null;
-  if (v instanceof Date) return v;
-  if (typeof v === "number") return new Date(Math.round((v - 25569) * 86400000));
-  if (typeof v === "string" && v.trim()) return new Date(v);
-  return null;
-};
-const parseRow = (row) => {
-  const K = Object.keys(row);
-  const g = (cands) => {
-    const k = K.find((k) => cands.some((c) => k.toLowerCase().replace(/[\s_\-]/g, "").includes(c)));
-    return k ? row[k] : "";
-  };
-  const da_ = toDate(g(["dateapplied", "applieddate", "date", "applicationdate"]));
-  const dh_ = toDate(g(["datehired", "hireddate", "hired"]));
-  const age = parseInt(g(["age"])) || null;
-  const dth =
-    parseFloat(g(["daystohire", "timetohire", "daystoprocess"])) ||
-    (da_ && dh_ ? Math.round((dh_ - da_) / 86400000) : null);
-  const stage = String(g(["stage", "currentstage", "status", "recruitmentstage"]) || "Screening");
-  return {
-    name: String(g(["name", "applicant", "fullname"]) || ""),
-    dateApplied: da_,
-    dateHired: dh_,
-    source: String(g(["source", "sourceof", "sourceofapplication"]) || "Others"),
-    position: String(g(["position", "job", "role", "jobposition"]) || "Unknown"),
-    branch: String(g(["branch", "location", "site"]) || "Unknown"),
-    gender: String(g(["gender", "sex"]) || "Unknown"),
-    age,
-    ageGroup: ageBand(age),
-    stage,
-    hired: /hired|yes/i.test(stage),
-    daysToHire: dth,
-    offerAccepted: String(g(["offeraccepted", "accepted", "offer"]) || ""),
-    nps: String(g(["nps", "recommend", "wouldrecommend"]) || ""),
-  };
+const CHART_OPTS_LEGEND = {
+  ...CHART_OPTS,
+  plugins: {
+    ...CHART_OPTS.plugins,
+    legend: { display: true, labels: { font: { size: 11 }, boxWidth: 10, padding: 12 } },
+  },
 };
 
-const generateSample = () => {
-  const branches = ["HO", "Agoo", "Tuguegarao", "Cauayan", "Ilagan", "Santiago", "Bayombong", "Solano", "Aparri", "Roxas"];
-  const positions = ["Branch Manager", "IT Head", "Cashier", "Sales Associate", "Accounting Staff", "Loan Officer", "Customer Service Rep", "Teller", "Security Guard", "HR Assistant", "Operations Supervisor", "Credit Analyst", "Encoder", "Janitor", "Driver"];
-  const sources = ["Facebook", "Indeed", "Walk In", "Employee Referral", "Job Fair", "School Referral", "PESO Office", "Recruitment Agency", "Print Ads", "Customer Referral", "Others"];
-  const firstNames = ["Bhem","Wilbert","Maria","Juan","Ana","Jose","Carla","Mark","Liza","Ramon","Grace","Edgar","Rowena","Danilo","Sheila","Arnold","Maricel","Ronald","Jennifer","Michael","Cristina","Roberto","Marites","Eduardo","Rosario","Patrick","Lovely","Jerome","Aileen","Dennis","Hazel","Neil","Rhodora","Adrian","Fatima","Jayson","Clarissa","Felix","Pamela","Roel"];
-  const lastNames = ["Baldillo","Reyes","Santos","Cruz","Garcia","Mendoza","Torres","Flores","Villanueva","Ramos","Dela Cruz","Bautista","Aquino","Gonzales","Ramirez","Lopez","Castillo","Morales","Diaz","Hernandez","Soriano","Fernandez","Pascual","Evangelista","Aguilar","Navarro","Robles","Salazar","Miranda","Perez"];
-  const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
-
-  // 10 fixed starter rows matching your screenshot format
-  const starter = [
-    { name:"Bhem Baldillo",    dateApplied:new Date(2026,3,23), source:"Indeed",            position:"IT Head",           branch:"HO",         gender:"Male",   age:19, stage:"Screening",           offerAccepted:"", nps:"" },
-    { name:"Wilbert Baldillo", dateApplied:new Date(2026,3,24), source:"Facebook",           position:"Branch Manager",    branch:"Agoo",       gender:"Male",   age:25, stage:"Screening",           offerAccepted:"", nps:"" },
-    { name:"Maria Santos",     dateApplied:new Date(2026,3,10), source:"Walk In",            position:"Cashier",           branch:"Tuguegarao", gender:"Female", age:22, stage:"Initial Interview",    offerAccepted:"", nps:"" },
-    { name:"Juan Reyes",       dateApplied:new Date(2026,3,5),  source:"Employee Referral",  position:"Loan Officer",      branch:"Cauayan",    gender:"Male",   age:30, stage:"Exam",                offerAccepted:"", nps:"" },
-    { name:"Ana Garcia",       dateApplied:new Date(2026,2,28), source:"Job Fair",           position:"Teller",            branch:"Ilagan",     gender:"Female", age:24, stage:"Background Investigation", offerAccepted:"", nps:"" },
-    { name:"Carla Mendoza",    dateApplied:new Date(2026,2,15), source:"School Referral",    position:"Accounting Staff",  branch:"Santiago",   gender:"Female", age:21, stage:"Final Interview",     offerAccepted:"", nps:"" },
-    { name:"Mark Torres",      dateApplied:new Date(2026,2,10), source:"PESO Office",        position:"Operations Supervisor", branch:"Bayombong", gender:"Male", age:35, stage:"Orientation",        offerAccepted:"Yes", nps:"" },
-    { name:"Liza Flores",      dateApplied:new Date(2026,1,20), source:"Facebook",           position:"HR Assistant",      branch:"Solano",     gender:"Female", age:27, stage:"Hired",               offerAccepted:"Yes", nps:"Yes", dateHired:new Date(2026,2,5),  daysToHire:13 },
-    { name:"Ramon Cruz",       dateApplied:new Date(2026,1,14), source:"Indeed",             position:"Credit Analyst",    branch:"Aparri",     gender:"Male",   age:29, stage:"Hired",               offerAccepted:"Yes", nps:"Yes", dateHired:new Date(2026,2,1),  daysToHire:15 },
-    { name:"Grace Villanueva", dateApplied:new Date(2026,0,30), source:"Recruitment Agency", position:"Branch Manager",    branch:"Roxas",      gender:"Female", age:38, stage:"Hired",               offerAccepted:"Yes", nps:"No",  dateHired:new Date(2026,2,10), daysToHire:39 },
-  ].map(r => ({ ...r, ageGroup: ageBand(r.age), hired: r.stage === "Hired", daysToHire: r.daysToHire || null, dateHired: r.dateHired || null }));
-
-  // Generate additional random rows for chart variety (past 12 months)
-  const extra = [];
-  for (let m = 0; m < 12; m++) {
-    const cnt = 25 + Math.floor(Math.random() * 20);
-    for (let i = 0; i < cnt; i++) {
-      const da = new Date(2025, m, 1 + Math.floor(Math.random() * 27));
-      const si = Math.floor(Math.random() * 8);
-      const st = STAGES[si];
-      const isHired = si === 7;
-      const dth = isHired ? 10 + Math.floor(Math.random() * 20) : null;
-      const dh = isHired ? new Date(da.getTime() + dth * 86400000) : null;
-      const age = 18 + Math.floor(Math.random() * 35);
-      extra.push({
-        name: `${rand(firstNames)} ${rand(lastNames)}`,
-        dateApplied: da, dateHired: dh,
-        source: rand(sources), position: rand(positions), branch: rand(branches),
-        gender: Math.random() < 0.55 ? "Female" : "Male",
-        age, ageGroup: ageBand(age), stage: st, hired: isHired, daysToHire: dth,
-        offerAccepted: isHired ? (Math.random() < 0.85 ? "Yes" : "No") : "",
-        nps: isHired ? (Math.random() < 0.78 ? "Yes" : "No") : "",
-      });
-    }
-  }
-  return [...starter, ...extra];
+const CHART_OPTS_STACKED = {
+  ...CHART_OPTS,
+  plugins: {
+    ...CHART_OPTS.plugins,
+    legend: { display: true, labels: { font: { size: 10 }, boxWidth: 9, padding: 8 } },
+  },
+  scales: {
+    x: { stacked: true, grid: { display: false }, ticks: { color: "#888", font: { size: 10 } } },
+    y: { stacked: true, ticks: { color: "#888", font: { size: 10 } } },
+  },
 };
 
-// ─── Sub-components ───────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────
+   SUB-COMPONENTS
+───────────────────────────────────────────────────────────────── */
 
-function KpiCard({ icon, label, value, sub, color = PRIMARY, suffix = "" }) {
-  const strLen = String(value).length;
-  const fontSize = strLen > 12 ? 13 : strLen > 8 ? 16 : strLen > 5 ? 18 : 22;
+/* mirrors v-card stage card with top-bar color + avatars */
+function StageCard({ stageCard, onClick }) {
+  const color = STAGE_VUETIFY_COLOR_MAP[stageCard.stageName] || "#888";
   return (
-    <Card size="small" styles={{ body: { padding: "12px 16px" } }}
-      style={{ borderTop: `3px solid ${color}`, height: "100%" }}>
-      <Space orientation="vertical" size={4} style={{ width: "100%" }}>
-        <Space size={6}>
-          <span style={{ fontSize: 16 }}>{icon}</span>
-          <Text type="secondary" style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 700 }}>
-            {label}
-          </Text>
-        </Space>
-        <div style={{ fontSize, fontWeight: 800, lineHeight: 1.3, color, wordBreak: "break-word" }}>
-          {value}{suffix}
+    <Card
+      hoverable
+      onClick={onClick}
+      size="small"
+      style={{ borderRadius: 8, cursor: "pointer", height: "100%" }}
+      styles={{ body: { padding: 0 } }}
+    >
+      <div style={{ height: 5, background: color, borderRadius: "8px 8px 0 0" }} />
+      <div style={{ padding: "12px" }}>
+        <Text style={{ fontSize: 11, fontWeight: 700, color: "#555", textTransform: "uppercase", letterSpacing: 0.4 }}>
+          {stageCard.stageName}
+        </Text>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+          {/* Main count avatar */}
+          <Tooltip title={stageCard.stageName === "Hired" ? "Hired" : "On Process"}>
+            <div style={{
+              width: 52, height: 52, borderRadius: "50%", background: color,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "#fff", fontWeight: 900, fontSize: 18, flexShrink: 0,
+            }}>
+              {stageCard.countStageItems}
+            </div>
+          </Tooltip>
+          {/* Failed count avatar */}
+          {stageCard.failedCount != null && (
+            <Tooltip title="Failed / Not Qualified">
+              <div style={{
+                width: 38, height: 38, borderRadius: "50%", background: "#f5222d",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "#fff", fontWeight: 700, fontSize: 13, flexShrink: 0,
+              }}>
+                {stageCard.failedCount}
+              </div>
+            </Tooltip>
+          )}
+          {/* Reserved count avatar */}
+          {stageCard.reservedCount != null && (
+            <Tooltip title="Reserved">
+              <div style={{
+                width: 38, height: 38, borderRadius: "50%", background: "#1A237E",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: "#fff", fontWeight: 700, fontSize: 13, flexShrink: 0,
+              }}>
+                {stageCard.reservedCount}
+              </div>
+            </Tooltip>
+          )}
         </div>
-        <Text type="secondary" style={{ fontSize: 11 }}>{sub}</Text>
-      </Space>
+        <div style={{ marginTop: 10, display: "flex", gap: 4, flexWrap: "wrap" }}>
+          <Tag color={color} style={{ fontSize: 10, margin: 0 }}>
+            {stageCard.stageName !== "Hired" ? "on process" : "hired"}
+          </Tag>
+          {stageCard.failedCount != null && (
+            <Tag color="error" style={{ fontSize: 10, margin: 0 }}>failed / non-compliant</Tag>
+          )}
+          {stageCard.reservedCount != null && (
+            <Tag color="#1A237E" style={{ fontSize: 10, margin: 0, color: "#fff" }}>reserved</Tag>
+          )}
+        </div>
+      </div>
     </Card>
   );
 }
 
-function PipelineViz({ data }) {
-  const counts = STAGES.map((s) => ({ s, n: data.filter((r) => r.stage === s).length }));
+/* mirrors KPI v-card */
+function KpiCard({ icon, label, value, hexColor, sub }) {
   return (
-    <Row gutter={4} wrap={false} style={{ overflowX: "auto", paddingBottom: 4 }}>
-      {counts.map((x, i) => (
-        <Col key={x.s} flex="1" style={{ minWidth: 80, textAlign: "center" }}>
-          <Card size="small" styles={{ body: { padding: "10px 6px" } }}
-            style={{ borderColor: `${COLORS[i % COLORS.length]}44`, marginBottom: 0 }}>
-            <div style={{ fontSize: 22, fontWeight: 800, color: COLORS[i % COLORS.length] }}>{x.n}</div>
-            <div style={{ fontSize: 10, color: "#888", marginTop: 2, lineHeight: 1.3 }}>{x.s}</div>
+    <Card
+      size="small"
+      style={{ borderRadius: 8, borderTop: `3px solid ${hexColor}`, height: "100%" }}
+      styles={{ body: { padding: "12px 14px" } }}
+    >
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
+        <span style={{ fontSize: 16, marginRight: 4 }}>{icon}</span>
+        <Text style={{ fontSize: 10, fontWeight: 700, color: "#999", textTransform: "uppercase", letterSpacing: 0.5 }}>
+          {label}
+        </Text>
+      </div>
+      <div style={{ fontSize: 26, fontWeight: 800, color: hexColor, lineHeight: 1, marginTop: 4 }}>
+        {value}
+      </div>
+      <Text type="secondary" style={{ fontSize: 11, marginTop: 4, display: "block" }}>{sub}</Text>
+    </Card>
+  );
+}
+
+/* mirrors gender breakdown v-card */
+function GenderBreakdownCard({ genderBreakdownStats, totalCount }) {
+  return (
+    <Row gutter={[12, 12]}>
+      {genderBreakdownStats.map((g, i) => (
+        <Col key={g.gender} span={12}>
+          <Card size="small" style={{ borderRadius: 8, textAlign: "center" }} styles={{ body: { padding: "12px" } }}>
+            <div style={{ fontSize: 22, fontWeight: 900, color: CHART_COLORS[i] }}>{g.totalCount}</div>
+            <Text type="secondary" style={{ fontSize: 11 }}>{g.gender} Applicants</Text>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#52c41a", marginTop: 6 }}>
+              {g.hiredCount} hired ({pct(g.hiredCount, g.totalCount)}%)
+            </div>
+            <Progress
+              percent={pct(g.totalCount, totalCount)}
+              size="small"
+              showInfo={false}
+              strokeColor={CHART_COLORS[i]}
+              style={{ marginTop: 6 }}
+            />
+            <Text type="secondary" style={{ fontSize: 10 }}>
+              {pct(g.totalCount, totalCount)}% of total
+            </Text>
           </Card>
-          {i < counts.length - 1 && (
-            <Text type="secondary" style={{ fontSize: 14, display: "block", marginTop: 10 }}>›</Text>
-          )}
         </Col>
       ))}
     </Row>
   );
 }
 
-function FunnelViz({ data }) {
-  const total = data.length || 1;
-  const rows = [
-    { l: "Applications", n: data.length },
-    { l: "Initial Interview", n: data.filter((r) => STAGES.indexOf(r.stage) >= 2).length },
-    { l: "Exam", n: data.filter((r) => STAGES.indexOf(r.stage) >= 3).length },
-    { l: "Background Inv.", n: data.filter((r) => STAGES.indexOf(r.stage) >= 4).length },
-    { l: "Final Interview", n: data.filter((r) => STAGES.indexOf(r.stage) >= 5).length },
-    { l: "Orientation", n: data.filter((r) => STAGES.indexOf(r.stage) >= 6).length },
-    { l: "Hired", n: data.filter((r) => STAGES.indexOf(r.stage) >= 7 || r.hired).length },
-  ];
-  const max = rows[0].n || 1;
-  return (
-    <Space orientation="vertical" size={8} style={{ width: "100%" }}>
-      {rows.map((f, i) => (
-        <div key={f.l}>
-          <Row justify="space-between" style={{ marginBottom: 2 }}>
-            <Text style={{ fontSize: 11, color: "#666" }}>{f.l}</Text>
-            <Space size={8}>
-              <Text style={{ fontSize: 11, fontWeight: 700 }}>{f.n}</Text>
-              <Text type="secondary" style={{ fontSize: 10 }}>{pct(f.n, total)}%</Text>
-            </Space>
-          </Row>
-          <Progress
-            percent={pct(f.n, max)} showInfo={false} size="small"
-            strokeColor={COLORS[i % COLORS.length]} railColor="#f0f0f0"
-          />
-        </div>
-      ))}
-    </Space>
-  );
-}
-
-function GenderViz({ data }) {
-  const total = data.length || 1;
-  const hired = data.filter((r) => r.hired || /hired/i.test(r.stage));
-  const genders = [...new Set(data.map((r) => r.gender))].filter((g) => g && g !== "Unknown");
-  if (!genders.length) return <Text type="secondary">No gender data available.</Text>;
-  return (
-    <Row gutter={[12, 12]}>
-      {genders.map((g, i) => {
-        const n = data.filter((r) => r.gender === g).length;
-        const h = hired.filter((r) => r.gender === g).length;
-        return (
-          <Col key={g} xs={24} sm={12}>
-            <Card size="small" styles={{ body: { textAlign: "center", padding: "14px 10px" } }}>
-              <div style={{ fontSize: 22, fontWeight: 800, color: COLORS[i] }}>{n}</div>
-              <Text type="secondary" style={{ fontSize: 10 }}>{g} Applicants</Text>
-              <div style={{ marginTop: 6, fontSize: 12, color: "#52c41a", fontWeight: 600 }}>
-                {h} hired ({pct(h, n)}%)
-              </div>
-              <Progress percent={pct(n, total)} showInfo={false} size="small"
-                strokeColor={COLORS[i]} style={{ marginTop: 8 }} />
-              <Text type="secondary" style={{ fontSize: 10 }}>{pct(n, total)}% of total</Text>
-            </Card>
-          </Col>
-        );
-      })}
-    </Row>
-  );
-}
-
-function HeatmapViz({ data }) {
-  const sources = [...new Set(data.map((r) => r.source))].sort().slice(0, 8);
-  const stages = STAGES.slice(0, 7);
-  const grid = {};
-  data.forEach((r) => { const k = r.source + "||" + r.stage; grid[k] = (grid[k] || 0) + 1; });
-  const maxV = Math.max(...Object.values(grid), 1);
+/* mirrors heatmap table */
+function HeatmapTable({ sourceLabels, stageLabels, dataGrid, maxValue }) {
+  const getCellStyle = (source, stage) => {
+    const val = dataGrid[source + "||" + stage] || 0;
+    const intensity = val / (maxValue || 1);
+    const alpha = (0.12 + intensity * 0.75).toFixed(2);
+    return {
+      background: `rgba(56,158,13,${alpha})`,
+      color: intensity > 0.5 ? "#fff" : "#555",
+      fontWeight: intensity > 0.3 ? 700 : 400,
+      padding: "6px",
+      textAlign: "center",
+      borderRadius: 4,
+      minWidth: 36,
+      cursor: "default",
+    };
+  };
   return (
     <div style={{ overflowX: "auto" }}>
-      <table style={{ borderCollapse: "separate", borderSpacing: 3, fontSize: 11, minWidth: "100%" }}>
+      <table style={{ borderCollapse: "separate", borderSpacing: 3, fontSize: 11, width: "100%" }}>
         <thead>
           <tr>
-            <th style={{ padding: "4px 8px", color: "#888", textAlign: "left", fontWeight: 700 }} />
-            {stages.map((s) => (
-              <th key={s} style={{ padding: "4px 6px", color: "#888", fontWeight: 700, fontSize: 10,
-                writingMode: "vertical-rl", minWidth: 38, whiteSpace: "nowrap" }}>
+            <th style={{ padding: "4px 8px" }} />
+            {stageLabels.map((s) => (
+              <th key={s} style={{ padding: "4px 6px", color: "#888", fontWeight: 700, fontSize: 10, writingMode: "vertical-rl", minWidth: 38, whiteSpace: "nowrap" }}>
                 {s.length > 12 ? s.slice(0, 11) + "…" : s}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {sources.map((src) => (
+          {sourceLabels.map((src) => (
             <tr key={src}>
-              <td style={{ padding: "4px 8px", color: "#555", fontWeight: 600, whiteSpace: "nowrap" }}>{src}</td>
-              {stages.map((st) => {
-                const v = grid[src + "||" + st] || 0;
-                const inten = v / maxV;
-                const alpha = (0.12 + inten * 0.75).toFixed(2);
-                const bg = `rgba(56,158,13,${alpha})`;
-                const tc = inten > 0.5 ? "#fff" : "#555";
-                return (
-                  <Tooltip key={st} title={`${src} × ${st}: ${v}`}>
-                    <td style={{ padding: 6, textAlign: "center", background: bg,
-                      borderRadius: 4, color: tc, fontWeight: inten > 0.3 ? 700 : 400,
-                      cursor: "default" }}>
-                      {v || ""}
-                    </td>
-                  </Tooltip>
-                );
-              })}
+              <td style={{ padding: "4px 10px", color: "#555", fontWeight: 600, whiteSpace: "nowrap" }}>{src}</td>
+              {stageLabels.map((stage) => (
+                <td key={stage} style={getCellStyle(src, stage)}>
+                  {dataGrid[src + "||" + stage] || ""}
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>
@@ -340,445 +395,953 @@ function HeatmapViz({ data }) {
   );
 }
 
-function InsightsList({ data }) {
-  if (!data.length) return <Alert title="No data available." type="info" />;
-  const hired = data.filter((r) => r.hired || /hired/i.test(r.stage));
-  const hireRate = pct(hired.length, data.length);
-  const bySrc = groupBy(data, "source");
-  const topSrc = Object.entries(bySrc).sort((a, b) => b[1].length - a[1].length)[0];
-  const byPos = groupBy(data, "position");
-  const topPos = Object.entries(byPos).sort((a, b) => b[1].length - a[1].length)[0];
-  const byBr = groupBy(data, "branch");
-  const topBr = Object.entries(byBr).sort((a, b) => b[1].length - a[1].length)[0];
-  const ttArr = data.filter((r) => r.daysToHire > 0).map((r) => r.daysToHire);
-  const avgTTH = ttArr.length ? Math.round(ttArr.reduce((a, b) => a + b, 0) / ttArr.length) : null;
-  const npsArr = data.filter((r) => r.nps);
-  const npsRate = npsArr.length ? pct(npsArr.filter((r) => /yes/i.test(r.nps)).length, npsArr.length) : null;
-  const reserved = data.filter((r) => /reserved/i.test(r.stage)).length;
-
-  const ins = [
-    { color: PRIMARY, type: "success", text: `Overall hire rate stands at ${hireRate}% — ${hired.length} hired out of ${data.length} total applicants this period.` },
-    topSrc && { color: "#1677ff", type: "info", text: `${topSrc[0]} is the top applicant source with ${topSrc[1].length} applicants (${pct(topSrc[1].length, data.length)}%). Prioritize budget here.` },
-    topPos && { color: "#faad14", type: "warning", text: `${topPos[0]} is the most-applied position (${topPos[1].length} applicants). Check headcount targets.` },
-    topBr && { color: "#722ed1", type: "info", text: `${topBr[0]} branch has highest recruitment activity (${topBr[1].length} applicants). Ensure interviewer capacity.` },
-    avgTTH && { color: "#13c2c2", type: avgTTH > 15 ? "warning" : "success", text: `Average time-to-hire is ${avgTTH} days. ${avgTTH > 15 ? "Consider streamlining to reduce delay." : "Processing speed is within healthy range."}` },
-    reserved > 0 && { color: "#f5222d", type: "error", text: `${reserved} reserved applicants (qualified but lacking requirements) are pending. Follow up to convert.` },
-    npsRate != null && { color: PRIMARY, type: npsRate >= 75 ? "success" : npsRate >= 50 ? "warning" : "error", text: `Candidate NPS is ${npsRate}%. ${npsRate >= 75 ? "Excellent experience — maintain standards." : npsRate >= 50 ? "Moderate — review pain points." : "Below target — conduct exit surveys."}` },
-  ].filter(Boolean);
-
+/* mirrors reserved aging buckets + table */
+function ReservedAgingSection({ agingRows, agingBuckets }) {
+  const columns = [
+    { title: "Applicant",    dataIndex: "applicantName",    key: "applicantName" },
+    { title: "Stage",        dataIndex: "recruitmentStage", key: "recruitmentStage" },
+    { title: "Branch",       dataIndex: "appliedBranch",    key: "appliedBranch" },
+    { title: "Position",     dataIndex: "appliedPosition",  key: "appliedPosition" },
+    { title: "Date Applied", dataIndex: "dateAppliedStr",   key: "dateAppliedStr" },
+    {
+      title: "Days Waiting", dataIndex: "daysWaiting", key: "daysWaiting", align: "right",
+      render: (d) => (
+        <Tag color={d > 30 ? "error" : d > 14 ? "warning" : "success"} style={{ fontSize: 10 }}>
+          {d}d
+        </Tag>
+      ),
+    },
+  ];
   return (
-    <Space orientation="vertical" size={10} style={{ width: "100%" }}>
-      {ins.map((item, i) => (
-        <Alert key={i} type={item.type} showIcon title={item.text}
-          style={{ borderRadius: 8, fontSize: 13 }} />
-      ))}
-    </Space>
+    <>
+      <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
+        {agingBuckets.map((b) => (
+          <Col key={b.label} xs={12} sm={6}>
+            <div style={{ textAlign: "center", padding: "8px", borderLeft: `3px solid ${b.color}`, background: b.bg, borderRadius: 4 }}>
+              <div style={{ fontSize: 22, fontWeight: 900, color: b.color }}>{b.count}</div>
+              <Text style={{ fontSize: 11 }}>{b.label}</Text>
+            </div>
+          </Col>
+        ))}
+      </Row>
+      <Table
+        size="small"
+        dataSource={agingRows.map((r, i) => ({ ...r, key: i }))}
+        columns={columns}
+        pagination={{ pageSize: 10 }}
+      />
+    </>
   );
 }
 
-// ─── Main Dashboard ───────────────────────────────────────────
+/* mirrors placement match card */
+function PlacementMatchCard({ stats }) {
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+        <Text strong style={{ flex: 1 }}>Position Preference Match Rate</Text>
+        <Tag color={stats.positionMatchPct >= 70 ? "success" : "warning"}>
+          {stats.positionMatchPct}% matched
+        </Tag>
+      </div>
+      <Progress percent={stats.positionMatchPct} strokeColor={PRIMARY_GREEN} style={{ marginBottom: 8 }} />
+      <Text type="secondary" style={{ fontSize: 11 }}>
+        {stats.positionMatched} of {stats.posCompared} hired applicants placed in preferred position.
+      </Text>
+      <Divider style={{ margin: "12px 0" }} />
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+        <Text strong style={{ flex: 1 }}>Branch Preference Match</Text>
+        <Tag color={stats.branchMatchPct >= 70 ? "blue" : "warning"}>
+          {stats.branchMatchPct}% matched
+        </Tag>
+      </div>
+      <Progress percent={stats.branchMatchPct} strokeColor="#1677ff" style={{ marginBottom: 8 }} />
+      <Text type="secondary" style={{ fontSize: 11 }}>
+        {stats.branchMatched} of {stats.branchCompared} matched preferred branch.
+      </Text>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   CHART WRAPPER — renders a chart.js chart via react-chartjs-2
+───────────────────────────────────────────────────────────────── */
+function ChartBox({ type, data, options, height = 240 }) {
+  if (!data) return null;
+  const ChartComp = type === "doughnut" ? Doughnut : type === "line" ? Line : Bar;
+  return (
+    <div style={{ height }}>
+      <ChartComp data={data} options={{ ...options, responsive: true, maintainAspectRatio: false }} />
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   MAIN COMPONENT
+───────────────────────────────────────────────────────────────── */
 export default function RecruitmentDashboard() {
-  const [raw, setRaw] = useState([]);
-  const [filtered, setFiltered] = useState([]);
-  const [allMonths, setAllMonths] = useState([]);
-  const [selMonths, setSelMonths] = useState(new Set());
-  const [filters, setFilters] = useState({ branch: "", position: "", source: "", gender: "", stage: "" });
+  const router = useRouter();
 
-  // Auto-load starter records on first render
-  useEffect(() => { loadData(generateSample()); }, []);
+  /* ── mirrors data() ───────────────────────────────────────── */
+  const [isLoadingApplicants, setIsLoadingApplicants] = useState(false);
+  const [allApplicantRows, setAllApplicantRows]       = useState([]);
+  const [positions, setPositions]                     = useState([]);
+  const [branches, setBranches]                       = useState([]);
 
-  // Unique filter options
-  const opts = (key) => [...new Set(raw.map((r) => r[key]))].sort().map((v) => ({ label: v, value: v }));
+  const [analyticsDateRange, setAnalyticsDateRange] = useState({
+    from: getJanFirstThisYearIso(),
+    to:   getTodayIso(),
+  });
 
-  // Apply filters whenever deps change
-  useEffect(() => {
-    if (!raw.length) return;
-    const d = raw.filter((r) => {
-      if (filters.branch && r.branch !== filters.branch) return false;
-      if (filters.position && r.position !== filters.position) return false;
-      if (filters.source && r.source !== filters.source) return false;
-      if (filters.gender && r.gender !== filters.gender) return false;
-      if (filters.stage && r.stage !== filters.stage) return false;
-      if (r.dateApplied) {
-        const mk = r.dateApplied.getFullYear() + "-" + String(r.dateApplied.getMonth() + 1).padStart(2, "0");
-        if (!selMonths.has(mk)) return false;
-      }
+  const [applicantFilters, setApplicantFilters] = useState({
+    branch: "", position: "", source: "", stage: "", gender: "",
+  });
+
+  const applicantFilterDefs = [
+    { label: "Branch",   key: "branch"   },
+    { label: "Position", key: "position" },
+    { label: "Source",   key: "source"   },
+    { label: "Stage",    key: "stage"    },
+  ];
+
+  /* ── mirrors computed: dateFilteredApplicants ─────────────── */
+  const dateFilteredApplicants = useMemo(() => {
+    const fromDate = analyticsDateRange.from ? new Date(analyticsDateRange.from) : null;
+    const toDate   = analyticsDateRange.to   ? new Date(analyticsDateRange.to + "T23:59:59") : null;
+    return allApplicantRows.filter((a) => {
+      if (applicantFilters.branch   && a.appliedBranch     !== applicantFilters.branch)   return false;
+      if (applicantFilters.position && a.appliedPosition   !== applicantFilters.position) return false;
+      if (applicantFilters.source   && a.applicationSource !== applicantFilters.source)   return false;
+      if (applicantFilters.gender   && a.applicantGender   !== applicantFilters.gender)   return false;
+      if (applicantFilters.stage    && a.recruitmentStage  !== applicantFilters.stage)    return false;
+      const dateRef = a.dateHired ?? a.dateApplied;
+      if (fromDate && dateRef && dateRef < fromDate) return false;
+      if (toDate   && dateRef && dateRef > toDate)   return false;
       return true;
     });
-    setFiltered(d);
-  }, [raw, filters, selMonths]);
+  }, [allApplicantRows, applicantFilters, analyticsDateRange]);
 
-  const loadData = (rows) => {
-    const parsed = rows.map(parseRow).filter((r) => r.name || r.position || r.branch);
-    if (!parsed.length) { alert("No valid rows found."); return; }
-    const ms = new Set();
-    parsed.forEach((r) => {
-      if (r.dateApplied) ms.add(r.dateApplied.getFullYear() + "-" + String(r.dateApplied.getMonth() + 1).padStart(2, "0"));
+  /* ── mirrors computed: hiredApplicants ───────────────────── */
+  const hiredApplicants = useMemo(() => {
+    const fromDate = analyticsDateRange.from ? new Date(analyticsDateRange.from) : null;
+    const toDate   = analyticsDateRange.to   ? new Date(analyticsDateRange.to + "T23:59:59") : null;
+    return allApplicantRows.filter((a) => {
+      if (!a.isHired || !a.dateHired) return false;
+      if (applicantFilters.branch   && a.appliedBranch     !== applicantFilters.branch)   return false;
+      if (applicantFilters.position && a.appliedPosition   !== applicantFilters.position) return false;
+      if (applicantFilters.source   && a.applicationSource !== applicantFilters.source)   return false;
+      if (applicantFilters.gender   && a.applicantGender   !== applicantFilters.gender)   return false;
+      if (fromDate && a.dateHired < fromDate) return false;
+      if (toDate   && a.dateHired > toDate)   return false;
+      return true;
     });
-    const months = [...ms].sort();
-    setAllMonths(months);
-    setSelMonths(new Set(months));
-    setRaw(parsed);
-  };
+  }, [allApplicantRows, applicantFilters, analyticsDateRange]);
 
-  const handleFile = (file) => {
-    const rd = new FileReader();
-    rd.onload = (e) => {
-      const wb = XLSX.read(new Uint8Array(e.target.result), { type: "array", cellDates: true });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      loadData(XLSX.utils.sheet_to_json(ws, { defval: "" }));
-    };
-    rd.readAsArrayBuffer(file);
-    return false;
-  };
+  const allDateFilteredApplicants = useMemo(
+    () => [...dateFilteredApplicants, ...hiredApplicants],
+    [dateFilteredApplicants, hiredApplicants],
+  );
 
-  const resetFilters = () => {
-    setFilters({ branch: "", position: "", source: "", gender: "", stage: "" });
-    setSelMonths(new Set(allMonths));
-  };
+  /* ── mirrors computed: daysToHireValues / averageDaysToHire ─ */
+  const daysToHireValues = useMemo(
+    () => dateFilteredApplicants.filter((a) => a.daysToHire > 0).map((a) => a.daysToHire),
+    [dateFilteredApplicants],
+  );
+  const averageDaysToHire = useMemo(
+    () => daysToHireValues.length
+      ? Math.round(daysToHireValues.reduce((a, b) => a + b, 0) / daysToHireValues.length)
+      : null,
+    [daysToHireValues],
+  );
 
-  // Derived KPIs
-  const hired = filtered.filter((r) => r.hired || /hired/i.test(r.stage));
-  const ttArr = filtered.filter((r) => r.daysToHire > 0).map((r) => r.daysToHire);
-  const avgTTH = ttArr.length ? Math.round(ttArr.reduce((a, b) => a + b, 0) / ttArr.length) : null;
-  const offered = filtered.filter((r) => r.offerAccepted);
-  const accepted = offered.filter((r) => /yes/i.test(r.offerAccepted)).length;
-  const npsArr = filtered.filter((r) => r.nps);
-  const npsYes = npsArr.filter((r) => /yes/i.test(r.nps)).length;
-  const bySrc = groupBy(filtered, "source");
-  const topSrc = Object.entries(bySrc).sort((a, b) => b[1].length - a[1].length)[0];
+  /* ── mirrors computed: topApplicationSource ──────────────── */
+  const topApplicationSource = useMemo(() => {
+    const entries = Object.entries(groupByKey(dateFilteredApplicants, "applicationSource"))
+      .sort((a, b) => b[1].length - a[1].length);
+    return entries[0] || null;
+  }, [dateFilteredApplicants]);
 
-  // Chart data builders
-  const srcAppData = () => {
-    const entries = Object.entries(bySrc).sort((a, b) => b[1].length - a[1].length);
-    return {
-      labels: entries.map((e) => e[0]),
-      datasets: [{ label: "Applicants", data: entries.map((e) => e[1].length),
-        backgroundColor: COLORS.map((c) => c + "99"), borderColor: COLORS, borderWidth: 1, borderRadius: 4 }],
-    };
-  };
+  /* ── mirrors computed: kpiCards ─────────────────────────── */
+  const kpiCards = useMemo(() => [
+    { icon: "📥", label: "Total Applicants", hexColor: "#1677ff",    value: dateFilteredApplicants.length,                                             sub: `${pct(hiredApplicants.length, dateFilteredApplicants.length)}% hire rate` },
+    { icon: "✅", label: "Total Hired",       hexColor: PRIMARY_GREEN, value: hiredApplicants.length,                                                   sub: `${hiredApplicants.length} confirmed hires` },
+    { icon: "⏱️", label: "Avg Time to Hire", hexColor: "#faad14",    value: averageDaysToHire != null ? `${averageDaysToHire}d` : "N/A",               sub: `${daysToHireValues.length} data points` },
+    { icon: "📣", label: "Top Source",        hexColor: "#722ed1",    value: topApplicationSource ? topApplicationSource[0] : "—",                      sub: topApplicationSource ? `${topApplicationSource[1].length} applicants` : "" },
+    { icon: "🎯", label: "Hire Rate",          hexColor: "#13c2c2",   value: `${pct(hiredApplicants.length, dateFilteredApplicants.length)}%`,           sub: `${hiredApplicants.length} of ${dateFilteredApplicants.length}` },
+    { icon: "📅", label: "Period From",        hexColor: PRIMARY_GREEN, value: analyticsDateRange.from ? analyticsDateRange.from.slice(0, 7) : "All",   sub: `to ${analyticsDateRange.to || "today"}` },
+  ], [dateFilteredApplicants, hiredApplicants, averageDaysToHire, daysToHireValues, topApplicationSource, analyticsDateRange]);
 
-  const srcHireData = () => {
-    const byS = groupBy(hired, "source");
-    const entries = Object.entries(byS).sort((a, b) => b[1].length - a[1].length);
-    return {
-      labels: entries.map((e) => e[0]),
-      datasets: [{ data: entries.map((e) => e[1].length),
-        backgroundColor: COLORS.slice(0, entries.length), borderWidth: 2, borderColor: "#fff", hoverOffset: 5 }],
-    };
-  };
+  /* ── mirrors computed: recruitmentStageCards ─────────────── */
+  const recruitmentStageCards = useMemo(() => {
+    const countOnProcess = (keyword) =>
+      dateFilteredApplicants.filter((a) =>
+        a.rawProgressStatus.toLowerCase().includes(keyword.toLowerCase()) &&
+        /on process/i.test(a.rawProgressStatus)
+      ).length;
+    const countFailed = (keyword) =>
+      dateFilteredApplicants.filter((a) =>
+        a.rawProgressStatus.toLowerCase().includes(keyword.toLowerCase()) &&
+        /failed|not qualified|non-compliant/i.test(a.rawProgressStatus)
+      ).length;
+    const countReserved = () =>
+      dateFilteredApplicants.filter((a) => /reserved/i.test(a.rawProgressStatus)).length;
 
-  const monthlyData = () => {
-    const byM = {}, byMH = {};
-    filtered.forEach((r) => {
-      if (!r.dateApplied) return;
-      const k = r.dateApplied.getFullYear() + "-" + String(r.dateApplied.getMonth() + 1).padStart(2, "0");
-      byM[k] = (byM[k] || 0) + 1;
-      if (r.hired || /hired/i.test(r.stage)) byMH[k] = (byMH[k] || 0) + 1;
+    return [
+      { stageName: "Screening",         routePath: "/recruitment/screening-list",          countStageItems: countOnProcess("Screening"),         failedCount: countFailed("Screening"),         reservedCount: countReserved() },
+      { stageName: "Initial Interview", routePath: "/recruitment/initial-interview-list",  countStageItems: countOnProcess("Initial Interview"), failedCount: countFailed("Initial Interview"),  reservedCount: null },
+      { stageName: "Exam",              routePath: "/recruitment/iq-test-list",            countStageItems: countOnProcess("Exam"),              failedCount: countFailed("Exam"),               reservedCount: null },
+      { stageName: "B.I & Basic Req",   routePath: "/recruitment/bi-list",                 countStageItems: countOnProcess("B.I & Basic Req"),   failedCount: countFailed("B.I & Basic Req"),    reservedCount: null },
+      { stageName: "Final Interview",   routePath: "/recruitment/final-interview-list",    countStageItems: countOnProcess("Final Interview"),   failedCount: countFailed("Final Interview"),    reservedCount: null },
+      { stageName: "Orientation",       routePath: "/recruitment/orientation-list",        countStageItems: countOnProcess("Orientation"),       failedCount: countFailed("Orientation"),        reservedCount: null },
+      { stageName: "Hired",             routePath: "/recruitment/hired-list",              countStageItems: dateFilteredApplicants.filter((a) => a.dateHired !== null).length, failedCount: null, reservedCount: null },
+    ];
+  }, [dateFilteredApplicants]);
+
+  /* ── mirrors computed: recruitmentFunnelRows ─────────────── */
+  const recruitmentFunnelRows = useMemo(() => {
+    const countStage = (keyword) =>
+      dateFilteredApplicants.filter((a) =>
+        a.rawProgressStatus.toLowerCase().includes(keyword.toLowerCase())
+      ).length;
+    return [
+      { label: "Applications",      count: dateFilteredApplicants.length },
+      { label: "Screening",         count: countStage("Screening") },
+      { label: "Initial Interview", count: countStage("Initial Interview") },
+      { label: "Exam",              count: countStage("Exam") },
+      { label: "B.I & Basic Req",   count: countStage("B.I & Basic Req") },
+      { label: "Final Interview",   count: countStage("Final Interview") },
+      { label: "Orientation",       count: countStage("Orientation") },
+      { label: "Hired",             count: dateFilteredApplicants.filter((a) => a.dateHired !== null).length },
+    ];
+  }, [dateFilteredApplicants]);
+
+  /* ── mirrors computed: genderBreakdownStats ──────────────── */
+  const genderBreakdownStats = useMemo(() => {
+    const genders = [...new Set(allDateFilteredApplicants.map((a) => a.applicantGender))]
+      .filter((g) => g && g !== "Unknown");
+    return genders.map((gender) => ({
+      gender,
+      totalCount: allDateFilteredApplicants.filter((a) => a.applicantGender === gender).length,
+      hiredCount: hiredApplicants.filter((a) => a.applicantGender === gender).length,
+    }));
+  }, [allDateFilteredApplicants, hiredApplicants]);
+
+  /* ── mirrors computed: topPositionEntries ────────────────── */
+  const topPositionEntries = useMemo(() =>
+    Object.entries(groupByKey(allDateFilteredApplicants, "appliedPosition"))
+      .sort((a, b) => b[1].length - a[1].length).slice(0, 10)
+      .map((entry, i) => ({
+        rank: i + 1,
+        positionName: entry[0],
+        appliedCount: entry[1].length,
+        hiredCount: hiredApplicants.filter((a) => a.appliedPosition === entry[0]).length,
+        key: i,
+      })),
+    [allDateFilteredApplicants, hiredApplicants]);
+
+  /* ── mirrors computed: branchBreakdownEntries ────────────── */
+  const branchBreakdownEntries = useMemo(() =>
+    Object.entries(groupByKey(allDateFilteredApplicants, "appliedBranch"))
+      .sort((a, b) => b[1].length - a[1].length)
+      .map((entry, i) => ({
+        rank: i + 1,
+        branchName: entry[0],
+        appliedCount: entry[1].length,
+        hiredCount: hiredApplicants.filter((a) => a.appliedBranch === entry[0]).length,
+        key: i,
+      })),
+    [allDateFilteredApplicants, hiredApplicants]);
+
+  /* ── mirrors computed: heatmap ───────────────────────────── */
+  const heatmapSourceLabels = useMemo(() =>
+    [...new Set(dateFilteredApplicants.map((a) => a.applicationSource))].sort().slice(0, 8),
+    [dateFilteredApplicants]);
+  const heatmapStageLabels = RECRUITMENT_STAGES.slice(0, 7);
+  const heatmapDataGrid = useMemo(() => {
+    const grid = {};
+    dateFilteredApplicants.forEach((a) => {
+      const key = a.applicationSource + "||" + a.recruitmentStage;
+      grid[key] = (grid[key] || 0) + 1;
     });
-    const labels = Object.keys(byM).sort();
-    const pretty = labels.map((l) => { const [y, m] = l.split("-"); return new Date(y, m - 1).toLocaleDateString("en", { month: "short", year: "2-digit" }); });
+    return grid;
+  }, [dateFilteredApplicants]);
+  const heatmapMaxValue = useMemo(() =>
+    Math.max(...Object.values(heatmapDataGrid), 1), [heatmapDataGrid]);
+
+  /* ── mirrors computed: avgDaysPerStage ───────────────────── */
+  const avgDaysPerStage = useMemo(() => {
+    const avg = (arr) => arr.length
+      ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
+    const all = dateFilteredApplicants;
     return {
-      labels: pretty,
-      datasets: [
-        { label: "Applications", data: labels.map((k) => byM[k] || 0), borderColor: "#1677ff", backgroundColor: "rgba(22,119,255,0.1)", fill: true, tension: 0.4, pointRadius: 4, borderWidth: 2 },
-        { label: "Hired", data: labels.map((k) => byMH[k] || 0), borderColor: PRIMARY, backgroundColor: "rgba(56,158,13,0.1)", fill: true, tension: 0.4, pointRadius: 4, borderWidth: 2 },
+      labels: ["Screening", "Initial Int.", "Exam", "B.I & Bsc Req", "Final Int.", "Orientation"],
+      data: [
+        avg(all.filter((a) => a.dateApplied && a.dateScreening).map((a) => daysBetween(a.dateApplied, a.dateScreening))),
+        avg(all.filter((a) => a.dateScreening && a.dateInitial).map((a) => daysBetween(a.dateScreening, a.dateInitial))),
+        avg(all.filter((a) => a.dateInitial && a.dateIq).map((a) => daysBetween(a.dateInitial, a.dateIq))),
+        avg(all.filter((a) => a.dateIq && a.dateBi).map((a) => daysBetween(a.dateIq, a.dateBi))),
+        avg(all.filter((a) => a.dateBi && a.dateFinal).map((a) => daysBetween(a.dateBi, a.dateFinal))),
+        avg(all.filter((a) => a.dateFinal && a.dateOrientation).map((a) => daysBetween(a.dateFinal, a.dateOrientation))),
       ],
     };
-  };
+  }, [dateFilteredApplicants]);
 
-  const ageData = () => {
-    const appCounts = AGE_BANDS.map((b) => filtered.filter((r) => r.ageGroup === b).length);
-    const hireCounts = AGE_BANDS.map((b) => hired.filter((r) => r.ageGroup === b).length);
+  /* ── mirrors computed: stageOutcomeData ──────────────────── */
+  const stageOutcomeData = useMemo(() => {
+    const all = dateFilteredApplicants;
+    const stages = ["Screening", "Initial Interview", "Exam", "B.I & Basic Req"];
     return {
-      labels: AGE_BANDS,
+      labels: stages,
+      onProcess:    stages.map((s) => all.filter((a) => a.rawProgressStatus.toLowerCase().includes(s.toLowerCase()) && /on process/i.test(a.rawProgressStatus)).length),
+      failed:       stages.map((s) => all.filter((a) => a.rawProgressStatus.toLowerCase().includes(s.toLowerCase()) && /failed|not qualified/i.test(a.rawProgressStatus)).length),
+      nonCompliant: stages.map((s) => all.filter((a) => a.rawProgressStatus.toLowerCase().includes(s.toLowerCase()) && /non-compliant/i.test(a.rawProgressStatus)).length),
+    };
+  }, [dateFilteredApplicants]);
+
+  /* ── mirrors computed: nonCompliantByMonth ───────────────── */
+  const nonCompliantByMonth = useMemo(() => {
+    const byMonth = {};
+    dateFilteredApplicants.forEach((a) => {
+      if (!a.dateApplied || !/non-compliant/i.test(a.rawProgressStatus)) return;
+      const mk = a.dateApplied.getFullYear() + "-" + String(a.dateApplied.getMonth() + 1).padStart(2, "0");
+      byMonth[mk] = (byMonth[mk] || 0) + 1;
+    });
+    const keys = Object.keys(byMonth).sort();
+    return {
+      labels: keys.map((mk) => { const [y, m] = mk.split("-"); return new Date(+y, +m - 1).toLocaleDateString("en", { month: "short", year: "2-digit" }); }),
+      data: keys.map((k) => byMonth[k]),
+    };
+  }, [dateFilteredApplicants]);
+
+  /* ── mirrors computed: reservedAgingRows ─────────────────── */
+  const reservedAgingRows = useMemo(() => {
+    const today = new Date();
+    return dateFilteredApplicants
+      .filter((a) => /reserved/i.test(a.rawProgressStatus))
+      .map((a) => ({
+        applicantName:    a.applicantName,
+        recruitmentStage: a.recruitmentStage,
+        appliedBranch:    a.appliedBranch,
+        appliedPosition:  a.appliedPosition,
+        dateAppliedStr:   a.dateApplied ? dayjs(a.dateApplied).format("MM/DD/YYYY") : "—",
+        daysWaiting:      a.dateApplied ? Math.round((today - a.dateApplied) / 86400000) : 0,
+      }))
+      .sort((a, b) => b.daysWaiting - a.daysWaiting);
+  }, [dateFilteredApplicants]);
+
+  /* ── mirrors computed: reservedAgingBuckets ──────────────── */
+  const reservedAgingBuckets = useMemo(() => [
+    { label: "0–7 days",   color: "#389e0d", bg: "#f6ffed", count: reservedAgingRows.filter((r) => r.daysWaiting <= 7).length },
+    { label: "8–14 days",  color: "#faad14", bg: "#fffbe6", count: reservedAgingRows.filter((r) => r.daysWaiting > 7  && r.daysWaiting <= 14).length },
+    { label: "15–30 days", color: "#fa8c16", bg: "#fff7e6", count: reservedAgingRows.filter((r) => r.daysWaiting > 14 && r.daysWaiting <= 30).length },
+    { label: ">30 days",   color: "#f5222d", bg: "#fff1f0", count: reservedAgingRows.filter((r) => r.daysWaiting > 30).length },
+  ], [reservedAgingRows]);
+
+  /* ── mirrors computed: educAttainStats ───────────────────── */
+  const educAttainStats = useMemo(() =>
+    Object.entries(groupByKey(allDateFilteredApplicants, "educAttain"))
+      .filter(([k]) => k && k !== "Unknown")
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([educ, rows]) => ({
+        educ,
+        count:    rows.length,
+        hired:    hiredApplicants.filter((a) => a.educAttain === educ).length,
+        hireRate: pct(hiredApplicants.filter((a) => a.educAttain === educ).length, rows.length),
+      })),
+    [allDateFilteredApplicants, hiredApplicants]);
+
+  /* ── mirrors computed: civilStatusStats ──────────────────── */
+  const civilStatusStats = useMemo(() =>
+    Object.entries(groupByKey(allDateFilteredApplicants, "civilStatus"))
+      .filter(([k]) => k && k !== "Unknown")
+      .sort((a, b) => b[1].length - a[1].length)
+      .map(([status, rows]) => ({ status, count: rows.length })),
+    [allDateFilteredApplicants]);
+
+  /* ── mirrors computed: hiringOfficerStats ────────────────── */
+  const hiringOfficerStats = useMemo(() => {
+    const hired = hiredApplicants.filter((a) => a.hiringOfficerName);
+    return Object.entries(groupByKey(hired, "hiringOfficerName"))
+      .sort((a, b) => b[1].length - a[1].length).slice(0, 15)
+      .map((entry, i) => {
+        const rows = entry[1];
+        const days = rows.filter((a) => a.daysToHire > 0).map((a) => a.daysToHire);
+        const avgDays = days.length ? Math.round(days.reduce((a, b) => a + b, 0) / days.length) : null;
+        return {
+          rank: i + 1,
+          officerName:     entry[0],
+          officerPosition: rows[0].hiringOfficerPosition,
+          hiredCount:      rows.length,
+          avgDays,
+          hireRate: pct(rows.length, dateFilteredApplicants.filter((a) => a.hiringOfficerName === entry[0]).length || rows.length),
+          key: i,
+        };
+      });
+  }, [hiredApplicants, dateFilteredApplicants]);
+
+  /* ── mirrors computed: placementMatchStats ───────────────── */
+  const placementMatchStats = useMemo(() => {
+    const posMap    = {};
+    const branchMap = {};
+    positions.forEach((p) => { posMap[String(p.id)]    = p.name; });
+    branches.forEach((b)  => { branchMap[String(b.id)] = b.name; });
+    const splitIds  = (str) => String(str || "").split(",").map((s) => s.trim()).filter(Boolean);
+
+    const withPosPref    = hiredApplicants.filter((a) => a.positionPreference && a.employmentPosition);
+    const withBranchPref = hiredApplicants.filter((a) => a.branchPreference   && a.employmentBranch);
+
+    const posMatched = withPosPref.filter((a) => {
+      const preferred = splitIds(a.positionPreference).map((id) => (posMap[id] || "").toLowerCase().trim()).filter(Boolean);
+      return preferred.includes(String(a.employmentPosition).toLowerCase().trim());
+    }).length;
+
+    const branchMatched = withBranchPref.filter((a) => {
+      const preferred = splitIds(a.branchPreference).map((id) => (branchMap[id] || "").toLowerCase().trim()).filter(Boolean);
+      return preferred.includes(String(a.employmentBranch).toLowerCase().trim());
+    }).length;
+
+    return {
+      posCompared:      withPosPref.length,
+      positionMatched:  posMatched,
+      positionMatchPct: pct(posMatched, withPosPref.length),
+      branchCompared:   withBranchPref.length,
+      branchMatched,
+      branchMatchPct:   pct(branchMatched, withBranchPref.length),
+    };
+  }, [hiredApplicants, positions, branches]);
+
+  /* ── mirrors computed: iqPassRateByPosition ──────────────── */
+  const iqPassRateByPosition = useMemo(() => {
+    const all = dateFilteredApplicants.filter((a) => a.iqStatus != null);
+    return Object.entries(groupByKey(all, "appliedPosition"))
+      .sort((a, b) => b[1].length - a[1].length).slice(0, 8)
+      .map(([pos, rows]) => ({
+        pos,
+        passed:   rows.filter((a) => Number(a.iqStatus) === 1).length,
+        failed:   rows.filter((a) => Number(a.iqStatus) === 2).length,
+        passRate: pct(rows.filter((a) => Number(a.iqStatus) === 1).length, rows.length),
+      }));
+  }, [dateFilteredApplicants]);
+
+  /* ── mirrors computed: recruitmentInsights ───────────────── */
+  const recruitmentInsights = useMemo(() => {
+    if (!dateFilteredApplicants.length) return [];
+    const hireRate         = pct(hiredApplicants.length, dateFilteredApplicants.length);
+    const topSrc           = Object.entries(groupByKey(dateFilteredApplicants, "applicationSource")).sort((a, b) => b[1].length - a[1].length)[0];
+    const topPos           = Object.entries(groupByKey(dateFilteredApplicants, "appliedPosition")).sort((a, b) => b[1].length - a[1].length)[0];
+    const topBranch        = Object.entries(groupByKey(dateFilteredApplicants, "appliedBranch")).sort((a, b) => b[1].length - a[1].length)[0];
+    const reservedCount    = dateFilteredApplicants.filter((a) => /reserved/i.test(a.recruitmentStage)).length;
+    const nonCompliantCount = dateFilteredApplicants.filter((a) => /non-compliant/i.test(a.rawProgressStatus)).length;
+    const longGapCount     = hiredApplicants.filter((a) => a.orientationContractGap != null && a.orientationContractGap > 7).length;
+    return [
+      { type: "success", icon: <CheckCircleOutlined />, text: `Overall hire rate is ${hireRate}% — ${hiredApplicants.length} hired out of ${dateFilteredApplicants.length} total applicants.` },
+      topSrc    && { type: "info",    icon: <InfoCircleOutlined />, text: `${topSrc[0]} is the top source with ${topSrc[1].length} applicants (${pct(topSrc[1].length, dateFilteredApplicants.length)}%). Prioritize budget here.` },
+      topPos    && { type: "warning", icon: <WarningOutlined />,    text: `${topPos[0]} is the most-applied position (${topPos[1].length} applicants). Check headcount targets.` },
+      topBranch && { type: "info",    icon: <InfoCircleOutlined />, text: `${topBranch[0]} branch has the highest recruitment activity (${topBranch[1].length} applicants).` },
+      averageDaysToHire && { type: averageDaysToHire > 15 ? "warning" : "success", icon: averageDaysToHire > 15 ? <WarningOutlined /> : <CheckCircleOutlined />, text: `Average time-to-hire is ${averageDaysToHire} days. ${averageDaysToHire > 15 ? "Consider streamlining stages." : "Processing speed is healthy."}` },
+      reservedCount > 0    && { type: "error",   icon: <AlertOutlined />, text: `${reservedCount} reserved applicants (qualified but pending requirements) need follow-up.` },
+      nonCompliantCount > 0 && { type: "warning", icon: <WarningOutlined />, text: `${nonCompliantCount} applicants are non-compliant across stages. Review document requirements.` },
+      longGapCount > 0     && { type: "error",   icon: <AlertOutlined />, text: `${longGapCount} hired applicants took more than 7 days between orientation and contract signing.` },
+    ].filter(Boolean);
+  }, [dateFilteredApplicants, hiredApplicants, averageDaysToHire]);
+
+  /* ── mirrors computed: getFilterOptions ─────────────────── */
+  const getFilterOptions = useCallback((filterKey) => {
+    const fieldMap = {
+      branch: "appliedBranch", position: "appliedPosition",
+      source: "applicationSource", stage: "recruitmentStage", gender: "applicantGender",
+    };
+    return [...new Set(allApplicantRows.map((a) => a[fieldMap[filterKey] || filterKey]))]
+      .filter(Boolean).sort()
+      .map((v) => ({ label: v, value: v }));
+  }, [allApplicantRows]);
+
+  /* ── mirrors methods: resetAllFilters ────────────────────── */
+  const resetAllFilters = useCallback(() => {
+    setApplicantFilters({ branch: "", position: "", source: "", stage: "", gender: "" });
+    setAnalyticsDateRange({ from: getJanFirstThisYearIso(), to: getTodayIso() });
+  }, []);
+
+  /* ── mirrors methods: fetchApplicants ────────────────────── */
+  const fetchApplicants = useCallback(async () => {
+    setIsLoadingApplicants(true);
+    try {
+      const response = await api.get("/api/recruitment/applicant_list");
+      let apiRows = [];
+      if (Array.isArray(response.data))                                             { apiRows = response.data; }
+      else if (response.data && Array.isArray(response.data.data))                  { apiRows = response.data.data; }
+      else if (response.data && typeof response.data === "object") {
+        const firstArray = Object.values(response.data).find((v) => Array.isArray(v));
+        if (firstArray) apiRows = firstArray;
+      }
+      setPositions(response.data?.positions || []);
+      setBranches(response.data?.branches   || []);
+      const normalized = apiRows.map(normalizeApiApplicantRow);
+      const valid = normalized.filter((a) => a.applicantName || a.appliedPosition !== "Unknown" || a.appliedBranch !== "Unknown");
+      setAllApplicantRows(valid.length ? valid : normalized);
+    } catch (error) {
+      console.error("[RecruitmentDashboard] fetch error:", error);
+      if (error?.response?.status === 401) router.push("/unauthorized");
+    } finally {
+      setIsLoadingApplicants(false);
+    }
+  }, [router]);
+
+  /* ── mirrors mounted() ───────────────────────────────────── */
+  useEffect(() => { fetchApplicants(); }, [fetchApplicants]);
+
+  /* ─────────────────────────────────────────────────────────
+     BUILD CHART DATA OBJECTS (mirrors renderAllCharts / buildChart)
+  ───────────────────────────────────────────────────────── */
+
+  /* Source of Application — horizontal bar */
+  const srcAppChartData = useMemo(() => {
+    const entries = Object.entries(groupByKey(dateFilteredApplicants, "applicationSource")).sort((a, b) => b[1].length - a[1].length);
+    return {
+      labels: entries.map((e) => e[0]),
+      datasets: [{ label: "Applicants", data: entries.map((e) => e[1].length), backgroundColor: CHART_COLORS.map((c) => c + "bb"), borderColor: CHART_COLORS, borderWidth: 1 }],
+    };
+  }, [dateFilteredApplicants]);
+
+  /* Hired by Source — doughnut */
+  const srcHireChartData = useMemo(() => {
+    const entries = Object.entries(groupByKey(hiredApplicants, "applicationSource")).sort((a, b) => b[1].length - a[1].length);
+    return {
+      labels: entries.map((e) => e[0]),
+      datasets: [{ data: entries.map((e) => e[1].length), backgroundColor: CHART_COLORS.slice(0, entries.length), borderWidth: 2, borderColor: "#fff" }],
+    };
+  }, [hiredApplicants]);
+
+  /* Monthly trend — line */
+  const monthlyTrendChartData = useMemo(() => {
+    const byMonth = {}, hiredByMonth = {};
+    dateFilteredApplicants.forEach((a) => {
+      if (!a.dateApplied) return;
+      const mk = a.dateApplied.getFullYear() + "-" + String(a.dateApplied.getMonth() + 1).padStart(2, "0");
+      byMonth[mk] = (byMonth[mk] || 0) + 1;
+      if (a.isHired) hiredByMonth[mk] = (hiredByMonth[mk] || 0) + 1;
+    });
+    const keys = Object.keys(byMonth).sort();
+    const labels = keys.map((mk) => { const [y, m] = mk.split("-"); return new Date(+y, +m - 1).toLocaleDateString("en", { month: "short", year: "2-digit" }); });
+    return {
+      labels,
       datasets: [
-        { label: "Applied", data: appCounts, backgroundColor: "rgba(22,119,255,0.6)", borderRadius: 4 },
-        { label: "Hired", data: hireCounts, backgroundColor: "rgba(56,158,13,0.7)", borderRadius: 4 },
+        { label: "Applications", data: keys.map((k) => byMonth[k] || 0),       borderColor: "#1677ff", backgroundColor: "rgba(22,119,255,0.1)", fill: true, tension: 0.4, pointRadius: 4, borderWidth: 2 },
+        { label: "Hired",        data: keys.map((k) => hiredByMonth[k] || 0),  borderColor: PRIMARY_GREEN, backgroundColor: "rgba(56,158,13,0.1)", fill: true, tension: 0.4, pointRadius: 4, borderWidth: 2 },
       ],
     };
-  };
+  }, [dateFilteredApplicants]);
 
-  // Position table
-  const posEntries = Object.entries(groupBy(filtered, "position"))
-    .sort((a, b) => b[1].length - a[1].length)
-    .slice(0, 10)
-    .map((e, i) => ({ key: i, rank: i + 1, position: e[0], applied: e[1].length, hired: hired.filter((r) => r.position === e[0]).length }));
+  /* Age group — bar */
+  const ageChartData = useMemo(() => ({
+    labels: AGE_BAND_LABELS,
+    datasets: [
+      { label: "Applied", data: AGE_BAND_LABELS.map((b) => dateFilteredApplicants.filter((a) => a.applicantAgeBand === b).length), backgroundColor: "rgba(22,119,255,0.65)" },
+      { label: "Hired",   data: AGE_BAND_LABELS.map((b) => hiredApplicants.filter((a) => a.applicantAgeBand === b).length),        backgroundColor: "rgba(56,158,13,0.75)" },
+    ],
+  }), [dateFilteredApplicants, hiredApplicants]);
 
-  const branchEntries = Object.entries(groupBy(filtered, "branch"))
-    .sort((a, b) => b[1].length - a[1].length)
-    .map((e, i) => ({ key: i, rank: i + 1, branch: e[0], applied: e[1].length, hired: hired.filter((r) => r.branch === e[0]).length }));
+  /* Avg days per stage — bar */
+  const stageTimeChartData = useMemo(() => ({
+    labels: avgDaysPerStage.labels,
+    datasets: [{ label: "Avg Days", data: avgDaysPerStage.data, backgroundColor: STAGE_COLORS.slice(0, 6), borderRadius: 4 }],
+  }), [avgDaysPerStage]);
 
-  const rankColor = (r) => r === 1 ? "#faad14" : r === 2 ? "#1677ff" : r === 3 ? "#722ed1" : "#888";
+  /* Stage outcome — stacked bar */
+  const stageOutcomeChartData = useMemo(() => ({
+    labels: stageOutcomeData.labels,
+    datasets: [
+      { label: "On Process",    data: stageOutcomeData.onProcess,    backgroundColor: "#1677ffcc" },
+      { label: "Failed",        data: stageOutcomeData.failed,        backgroundColor: "#f5222dcc" },
+      { label: "Non-Compliant", data: stageOutcomeData.nonCompliant,  backgroundColor: "#faad14cc" },
+    ],
+  }), [stageOutcomeData]);
 
+  /* Non-compliant trend — line */
+  const nonCompliantChartData = useMemo(() => ({
+    labels: nonCompliantByMonth.labels,
+    datasets: [{ label: "Non-Compliant", data: nonCompliantByMonth.data, borderColor: "#f5222d", backgroundColor: "rgba(245,34,45,0.1)", fill: true, tension: 0.4, pointRadius: 4, borderWidth: 2 }],
+  }), [nonCompliantByMonth]);
 
-  if (!raw.length) {
+  /* Education — grouped bar + line */
+  const educChartData = useMemo(() => ({
+    labels: educAttainStats.map((e) => e.educ),
+    datasets: [
+      { type: "bar",  label: "Applied",      data: educAttainStats.map((e) => e.count),    backgroundColor: "rgba(22,119,255,0.65)", yAxisID: "y" },
+      { type: "bar",  label: "Hired",        data: educAttainStats.map((e) => e.hired),    backgroundColor: "rgba(56,158,13,0.75)",  yAxisID: "y" },
+      { type: "line", label: "Hire Rate %",  data: educAttainStats.map((e) => e.hireRate), borderColor: "#722ed1", backgroundColor: "transparent", pointRadius: 5, borderWidth: 2, yAxisID: "y1" },
+    ],
+  }), [educAttainStats]);
+
+  /* Civil status — doughnut */
+  const civilStatusChartData = useMemo(() => ({
+    labels: civilStatusStats.map((c) => c.status),
+    datasets: [{ data: civilStatusStats.map((c) => c.count), backgroundColor: CHART_COLORS.slice(0, civilStatusStats.length), borderWidth: 2, borderColor: "#fff" }],
+  }), [civilStatusStats]);
+
+  /* IQ pass rate — stacked horizontal bar */
+  const iqChartData = useMemo(() => ({
+    labels: iqPassRateByPosition.map((d) => d.pos),
+    datasets: [
+      { label: "Passed", data: iqPassRateByPosition.map((d) => d.passed), backgroundColor: "rgba(56,158,13,0.75)" },
+      { label: "Failed", data: iqPassRateByPosition.map((d) => d.failed), backgroundColor: "rgba(245,34,45,0.65)" },
+    ],
+  }), [iqPassRateByPosition]);
+
+  /* ─────────────────────────────────────────────────────────
+     TABLE COLUMN DEFINITIONS
+  ───────────────────────────────────────────────────────── */
+  const positionColumns = [
+    { title: "#",        dataIndex: "rank",         width: 40,  render: (v) => <span style={{ fontWeight: 900, color: getRankColor(v) }}>{v}</span> },
+    { title: "Position", dataIndex: "positionName",             render: (v) => <a href={`/jobapplicants/index-new?position=${encodeURIComponent(v)}`} style={{ color: "#1677ff" }}>{v}</a> },
+    { title: "Applied",  dataIndex: "appliedCount",  align: "right" },
+    { title: "Hired",    dataIndex: "hiredCount",    align: "right" },
+    { title: "Rate",     key: "rate",                align: "right", render: (_, r) => <Tag color="success">{pct(r.hiredCount, r.appliedCount)}%</Tag> },
+  ];
+
+  const branchColumns = [
+    { title: "#",       dataIndex: "rank",         width: 40,  render: (v) => <span style={{ fontWeight: 900, color: getRankColor(v) }}>{v}</span> },
+    { title: "Branch",  dataIndex: "branchName",               render: (v) => <a href={`/jobapplicants/index-new?branch=${encodeURIComponent(v)}`} style={{ color: "#1677ff" }}>{v}</a> },
+    { title: "Applied", dataIndex: "appliedCount",  align: "right" },
+    { title: "Hired",   dataIndex: "hiredCount",    align: "right" },
+    { title: "Rate",    key: "rate",                align: "right", render: (_, r) => <Tag color="success">{pct(r.hiredCount, r.appliedCount)}%</Tag> },
+  ];
+
+  const officerColumns = [
+    { title: "#",         dataIndex: "rank",            width: 40, render: (v) => <span style={{ fontWeight: 900, color: getRankColor(v) }}>{v}</span> },
+    { title: "Officer",   dataIndex: "officerName" },
+    { title: "Position",  dataIndex: "officerPosition" },
+    { title: "Hired",     dataIndex: "hiredCount",      align: "right" },
+    { title: "Avg Days",  dataIndex: "avgDays",         align: "right", render: (v) => <span style={{ color: v > 30 ? "#f5222d" : v > 20 ? "#faad14" : "#389e0d" }}>{v != null ? v + "d" : "N/A"}</span> },
+    { title: "Hire Rate", dataIndex: "hireRate",        align: "right", render: (v) => <Tag color="success">{v}%</Tag> },
+  ];
+
+  /* ─────────────────────────────────────────────────────────
+     SECTION LABEL helper
+  ───────────────────────────────────────────────────────── */
+  const SectionLabel = ({ children }) => (
+    <div style={{ fontSize: 10, fontWeight: 800, color: "#aaa", letterSpacing: 1.5, textTransform: "uppercase", borderBottom: "1px solid #e8e8e8", paddingBottom: 6, marginBottom: 12 }}>
+      {children}
+    </div>
+  );
+
+  /* ─────────────────────────────────────────────────────────
+     EMPTY STATE  (mirrors v-if="!allApplicantRows.length")
+  ───────────────────────────────────────────────────────── */
+  if (!allApplicantRows.length && !isLoadingApplicants) {
     return (
-      <div style={{ padding: 32 }}>
-        <Card>
-          <div style={{ textAlign: "center", padding: "32px 24px 24px" }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
-            <Title level={3} style={{ marginBottom: 4 }}>Recruitment Dashboard</Title>
-            <Text type="secondary">Human Resource Division · Recruitment &amp; Hiring Department</Text>
-            <Divider />
-            <Row gutter={[16, 16]} style={{ maxWidth: 680, margin: "0 auto 24px" }}>
-              <Col span={24}>
-                <Upload.Dragger accept=".xlsx,.xls,.csv" beforeUpload={handleFile} showUploadList={false}>
-                  <p className="ant-upload-drag-icon"><UploadOutlined style={{ fontSize: 28, color: PRIMARY }} /></p>
-                  <p className="ant-upload-text">Click or drag your Excel / CSV file here</p>
-                  <p className="ant-upload-hint">
-                    Expected columns: Applicant Name · Date Applied · Source · Position · Branch · Gender · Age · Stage · Date Hired · Days to Hire · Offer Accepted · NPS
-                  </p>
-                </Upload.Dragger>
-              </Col>
-              <Col span={24} style={{ textAlign: "center" }}>
-                <Text type="secondary">Don't have a file yet? </Text>
-                <Button type="primary" size="small" onClick={() => loadData(generateSample())}>
-                  Load 400+ sample records
-                </Button>
-              </Col>
-            </Row>
-          </div>
+      <div style={{ minHeight: "100vh", background: "#f5f5f5", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Card style={{ maxWidth: 420, borderRadius: 16, borderTop: `4px solid ${PRIMARY_GREEN}`, textAlign: "center", padding: "32px 24px" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
+          <Title level={4} style={{ marginBottom: 4 }}>Recruitment Dashboard</Title>
+          <Text type="secondary" style={{ fontSize: 12 }}>Human Resource Division · Recruitment &amp; Hiring Department</Text>
+          <Divider />
+          <Text type="secondary" style={{ display: "block", marginBottom: 16 }}>No applicant data found or failed to load.</Text>
+          <Button type="primary" icon={<ReloadOutlined />} onClick={fetchApplicants}>Retry</Button>
         </Card>
       </div>
     );
   }
 
+  /* ─────────────────────────────────────────────────────────
+     MAIN RENDER
+  ───────────────────────────────────────────────────────── */
   return (
-    <div style={{ padding: "16px 12px 40px" }} className="recruitment-dashboard">
-      {/* Status bar */}
-      <Row justify="space-between" align="middle" style={{ marginBottom: 20 }}>
-        <Space>
-          <Badge status="success" text={<Text strong>Data loaded</Text>} />
-          <Tag color="green">{raw.length} records</Tag>
-        </Space>
-        <Button size="small" icon={<UploadOutlined />} onClick={() => setRaw([])}>Upload New File</Button>
-      </Row>
+    <div style={{ minHeight: "100vh", background: "#f5f5f5", fontFamily: "'Segoe UI', sans-serif" }}>
+      <Spin spinning={isLoadingApplicants} size="large" style={{ position: "fixed", top: "50%", left: "50%", zIndex: 999 }} />
 
-      {/* FILTERS */}
-      <Card size="small" style={{ marginBottom: 20 }}>
-        <Row gutter={[12, 12]} align="bottom">
-          {[
-            { label: "Branch", key: "branch" },
-            { label: "Position", key: "position" },
-            { label: "Source", key: "source" },
-            { label: "Stage", key: "stage" },
-          ].map(({ label, key }) => (
-            <Col key={key} xs={24} sm={12} md={4}>
-              <div style={{ marginBottom: 4 }}>
-                <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</Text>
-              </div>
-              <Select allowClear placeholder={`All ${label}s`} style={{ width: "100%" }}
-                options={opts(key)} value={filters[key] || undefined}
-                onChange={(v) => setFilters((f) => ({ ...f, [key]: v || "" }))} />
+      <div style={{ padding: "20px 24px" }}>
+
+        {/* ── Status bar (mirrors v-row align="center" mb-4) ──── */}
+        <Row justify="space-between" align="middle" style={{ marginBottom: 20 }}>
+          <Tag color="success" icon={<CheckCircleOutlined />}>
+            {allApplicantRows.length} records loaded
+          </Tag>
+          <Button size="small" icon={<ReloadOutlined />} onClick={fetchApplicants} loading={isLoadingApplicants}>
+            Refresh
+          </Button>
+        </Row>
+
+        {/* ── FILTERS (mirrors applicantFilterDefs v-select loop) ── */}
+        <Card size="small" style={{ marginBottom: 20, borderRadius: 8 }}>
+          <Row gutter={[12, 12]} align="bottom">
+            {applicantFilterDefs.map(({ label, key }) => (
+              <Col key={key} xs={12} sm={8} md={4}>
+                <Text style={{ fontSize: 10, fontWeight: 700, color: "#999", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 4 }}>
+                  {label}
+                </Text>
+                <Select
+                  allowClear
+                  placeholder={`All ${label}s`}
+                  style={{ width: "100%" }}
+                  options={getFilterOptions(key)}
+                  value={applicantFilters[key] || undefined}
+                  onChange={(v) => setApplicantFilters((f) => ({ ...f, [key]: v || "" }))}
+                />
+              </Col>
+            ))}
+            {/* Gender filter */}
+            <Col xs={12} sm={8} md={4}>
+              <Text style={{ fontSize: 10, fontWeight: 700, color: "#999", textTransform: "uppercase", letterSpacing: 0.5, display: "block", marginBottom: 4 }}>
+                Gender
+              </Text>
+              <Select
+                allowClear
+                placeholder="All"
+                style={{ width: "100%" }}
+                options={[{ label: "Male", value: "Male" }, { label: "Female", value: "Female" }]}
+                value={applicantFilters.gender || undefined}
+                onChange={(v) => setApplicantFilters((f) => ({ ...f, gender: v || "" }))}
+              />
+            </Col>
+            <Col xs={12} sm={8} md={4}>
+              <Button icon={<ReloadOutlined />} onClick={resetAllFilters} block>Reset</Button>
+            </Col>
+          </Row>
+        </Card>
+
+        {/* ── DATE RANGE (mirrors v-menu date pickers) ──────────── */}
+        <Card size="small" style={{ marginBottom: 20, borderRadius: 8 }}>
+          <Row align="middle" gutter={[12, 8]}>
+            <Col>
+              <Text style={{ fontSize: 10, fontWeight: 700, color: "#999", textTransform: "uppercase", letterSpacing: 1 }}>
+                Date Range
+              </Text>
+            </Col>
+            <Col>
+              <RangePicker
+                size="small"
+                value={[
+                  analyticsDateRange.from ? dayjs(analyticsDateRange.from) : null,
+                  analyticsDateRange.to   ? dayjs(analyticsDateRange.to)   : null,
+                ]}
+                onChange={(dates) => {
+                  setAnalyticsDateRange({
+                    from: dates?.[0] ? dates[0].format("YYYY-MM-DD") : "",
+                    to:   dates?.[1] ? dates[1].format("YYYY-MM-DD") : "",
+                  });
+                }}
+              />
+            </Col>
+            <Col>
+              <Button size="small" danger type="text" icon={<ReloadOutlined />}
+                onClick={() => setAnalyticsDateRange({ from: getJanFirstThisYearIso(), to: getTodayIso() })}>
+                Reset to Default
+              </Button>
+            </Col>
+            <Col>
+              <Text type="secondary" style={{ fontSize: 11 }}>
+                Showing: <strong>{analyticsDateRange.from || "All time"}</strong> → <strong>{analyticsDateRange.to || "Today"}</strong>
+              </Text>
+            </Col>
+          </Row>
+        </Card>
+
+        {/* ── KPIs ───────────────────────────────────────────────── */}
+        <SectionLabel>Key Performance Indicators</SectionLabel>
+        <Row gutter={[12, 12]} style={{ marginBottom: 24 }}>
+          {kpiCards.map((k) => (
+            <Col key={k.label} xs={12} sm={8} md={4}>
+              <KpiCard {...k} />
             </Col>
           ))}
-          <Col xs={24} sm={12} md={4}>
-            <div style={{ marginBottom: 4 }}>
-              <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Gender</Text>
-            </div>
-            <Select allowClear placeholder="All" style={{ width: "100%" }}
-              options={[{ label: "Male", value: "Male" }, { label: "Female", value: "Female" }]}
-              value={filters.gender || undefined}
-              onChange={(v) => setFilters((f) => ({ ...f, gender: v || "" }))} />
+        </Row>
+
+        {/* ── STAGE PIPELINE CARDS ──────────────────────────────── */}
+        <SectionLabel>Applicant Pipeline</SectionLabel>
+        <Row gutter={[12, 12]} style={{ marginBottom: 24 }}>
+          {recruitmentStageCards.map((card) => (
+            <Col key={card.stageName} xs={24} sm={12} md={8} lg={6} xl={3} style={{ flex: 1, minWidth: 150 }}>
+              <StageCard stageCard={card} onClick={() => router.push(card.routePath)} />
+            </Col>
+          ))}
+        </Row>
+
+        {/* ── RECRUITMENT FUNNEL ────────────────────────────────── */}
+        <SectionLabel>Recruitment Funnel</SectionLabel>
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Col xs={24} md={12}>
+            <Card size="small" title="Recruitment Funnel" style={{ borderRadius: 8 }}
+              extra={<Text type="secondary" style={{ fontSize: 11 }}>Drop-off &amp; conversion per stage</Text>}>
+              {recruitmentFunnelRows.map((row, i) => (
+                <div key={row.label} style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <Text style={{ fontSize: 12, color: "#666" }}>{row.label}</Text>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <Text strong style={{ fontSize: 12 }}>{row.count}</Text>
+                      <Text type="secondary" style={{ fontSize: 11 }}>{pct(row.count, dateFilteredApplicants.length)}% of total</Text>
+                      {i > 0 && recruitmentFunnelRows[i - 1].count > 0 && (
+                        <Tag color={conversionColor(row.count, recruitmentFunnelRows[i - 1].count)} style={{ fontSize: 10, margin: 0 }}>
+                          {pct(row.count, recruitmentFunnelRows[i - 1].count)}% pass
+                        </Tag>
+                      )}
+                    </div>
+                  </div>
+                  <Progress
+                    percent={pct(row.count, recruitmentFunnelRows[0].count || 1)}
+                    strokeColor={STAGE_COLORS[i % STAGE_COLORS.length]}
+                    showInfo={false}
+                    size="small"
+                  />
+                </div>
+              ))}
+            </Card>
           </Col>
-          <Col xs={24} sm={12} md={4}>
-            <Button icon={<ReloadOutlined />} onClick={resetFilters} block>Reset</Button>
+          <Col xs={24} md={12}>
+            <Card size="small" title="Avg. Days per Stage (real data)" style={{ borderRadius: 8 }}>
+              <ChartBox type="bar" data={stageTimeChartData} options={CHART_OPTS} height={220} />
+            </Card>
           </Col>
         </Row>
-      </Card>
 
-      {/* TIMELINE */}
-      <Card size="small" style={{ marginBottom: 20 }}>
-        <Row align="middle" gutter={[8, 8]}>
-          <Col>
-            <Text type="secondary" style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>Month</Text>
+        {/* ── SOURCING METRICS ──────────────────────────────────── */}
+        <SectionLabel>Sourcing Metrics</SectionLabel>
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Col xs={24} md={12}>
+            <Card size="small" title="Source of Application" style={{ borderRadius: 8 }}>
+              <ChartBox type="bar" data={srcAppChartData} options={{ ...CHART_OPTS, indexAxis: "y" }} height={260} />
+            </Card>
           </Col>
-          <Col flex={1}>
-            <Space size={4} wrap>
-              {allMonths.map((m) => {
-                const [y, mo] = m.split("-");
-                const lbl = new Date(y, mo - 1).toLocaleDateString("en", { month: "short", year: "2-digit" });
-                const on = selMonths.has(m);
-                return (
-                  <Tag key={m} color={on ? "green" : "default"} style={{ cursor: "pointer", userSelect: "none" }}
-                    onClick={() => setSelMonths((prev) => {
-                      const next = new Set(prev);
-                      next.has(m) ? next.delete(m) : next.add(m);
-                      return next;
-                    })}>
-                    {lbl}
-                  </Tag>
-                );
-              })}
-            </Space>
-          </Col>
-          <Col>
-            <Button size="small" type="link" onClick={() => setSelMonths(new Set(allMonths))}>All</Button>
+          <Col xs={24} md={12}>
+            <Card size="small" title="Hired by Source" style={{ borderRadius: 8 }}>
+              <ChartBox type="doughnut" data={srcHireChartData} options={{ responsive: true, maintainAspectRatio: false, cutout: "58%", plugins: { legend: { position: "right", labels: { font: { size: 10 }, boxWidth: 9, padding: 6 } } } }} height={260} />
+            </Card>
           </Col>
         </Row>
-      </Card>
 
-      {/* KPIs */}
-      <Divider titlePlacement="left" style={{ fontSize: 11, color: "#888" }} styles={{ content: { margin: "0 8px 0 0" } }}>KEY PERFORMANCE INDICATORS</Divider>
-      <Row gutter={[12, 12]} style={{ marginBottom: 24 }}>
-        <Col xs={12} sm={12} md={8} lg={4}>
-          <KpiCard icon="📥" label="Total Applicants" value={filtered.length} color="#1677ff"
-            sub={`${pct(hired.length, filtered.length)}% hire rate`} />
-        </Col>
-        <Col xs={12} sm={12} md={8} lg={4}>
-          <KpiCard icon="✅" label="Total Hired" value={hired.length} color={PRIMARY}
-            sub={`${hired.length} confirmed hires`} />
-        </Col>
-        <Col xs={12} sm={12} md={8} lg={4}>
-          <KpiCard icon="⏱️" label="Avg Time to Hire" value={avgTTH != null ? avgTTH : "N/A"} suffix={avgTTH != null ? "d" : ""}
-            color="#faad14" sub={`${ttArr.length} data points`} />
-        </Col>
-        <Col xs={12} sm={12} md={8} lg={4}>
-          <KpiCard icon="🎯" label="Offer Acceptance" value={offered.length ? `${pct(accepted, offered.length)}%` : "N/A"}
-            color="#13c2c2" sub={`${accepted} of ${offered.length} offers`} />
-        </Col>
-        <Col xs={12} sm={12} md={8} lg={4}>
-          <KpiCard icon="📣" label="Top Source" value={topSrc ? topSrc[0] : "—"}
-            color="#722ed1" sub={topSrc ? `${topSrc[1].length} applicants` : ""} />
-        </Col>
-        <Col xs={12} sm={12} md={8} lg={4}>
-          <KpiCard icon="⭐" label="Candidate NPS" value={npsArr.length ? `${pct(npsYes, npsArr.length)}%` : "N/A"}
-            color={PRIMARY} sub={`${npsArr.length} respondents`} />
-        </Col>
-      </Row>
+        {/* ── APPLICANT DISTRIBUTION ────────────────────────────── */}
+        <SectionLabel>Applicant Distribution</SectionLabel>
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Col xs={24} md={12}>
+            <Card size="small" title="Applications & Hires by Month" style={{ borderRadius: 8 }}>
+              <ChartBox type="line" data={monthlyTrendChartData} options={CHART_OPTS_LEGEND} height={240} />
+            </Card>
+          </Col>
+          <Col xs={24} md={12}>
+            <Card size="small" title="Age Group Distribution" style={{ borderRadius: 8 }}>
+              <ChartBox type="bar" data={ageChartData} options={CHART_OPTS_LEGEND} height={240} />
+            </Card>
+          </Col>
+        </Row>
 
-      {/* PIPELINE */}
-      <Divider titlePlacement="left" style={{ fontSize: 11, color: "#888" }} styles={{ content: { margin: "0 8px 0 0" } }}>APPLICANT PIPELINE</Divider>
-      <Card title="Stage Distribution" size="small" style={{ marginBottom: 24 }}
-        extra={<Text type="secondary" style={{ fontSize: 11 }}>Count per recruitment stage</Text>}>
-        <PipelineViz data={filtered} />
-      </Card>
+        {/* ── GENDER + OUTCOMES ─────────────────────────────────── */}
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Col xs={24} md={12}>
+            <Card size="small" title="Gender Breakdown" style={{ borderRadius: 8 }}>
+              <GenderBreakdownCard genderBreakdownStats={genderBreakdownStats} totalCount={allDateFilteredApplicants.length} />
+            </Card>
+          </Col>
+          <Col xs={24} md={12}>
+            <Card size="small" title="Stage Outcome Distribution (real data)" style={{ borderRadius: 8 }}>
+              <ChartBox type="bar" data={stageOutcomeChartData} options={CHART_OPTS_STACKED} height={240} />
+            </Card>
+          </Col>
+        </Row>
 
-      {/* FUNNEL + STAGE TIME */}
-      <Divider titlePlacement="left" style={{ fontSize: 11, color: "#888" }} styles={{ content: { margin: "0 8px 0 0" } }}>RECRUITMENT FUNNEL</Divider>
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} md={12}>
-          <Card title="Recruitment Funnel" size="small" extra={<Text type="secondary" style={{ fontSize: 11 }}>Drop-off per stage</Text>}>
-            <FunnelViz data={filtered} />
-          </Card>
-        </Col>
-        <Col xs={24} md={12}>
-          <Card title="Avg. Days per Stage" size="small">
-            <div style={{ height: "clamp(180px, 30vw, 220px)" }}>
-              <Bar data={{
-                labels: ["Screening", "Initial Int.", "Exam", "BG Invest.", "Final Int.", "Orientation"],
-                datasets: [{ label: "Avg Days", data: [6, 8, 10, 14, 12, 7], backgroundColor: COLORS.slice(0, 6), borderRadius: 6, borderSkipped: false }],
-              }} options={{ ...CHART_OPTS, plugins: { legend: { display: false } } }} />
-            </div>
-          </Card>
-        </Col>
-      </Row>
+        {/* ── COMPLIANCE & ONBOARDING ───────────────────────────── */}
+        <SectionLabel>Compliance &amp; Onboarding Metrics</SectionLabel>
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Col xs={24} md={12}>
+            <Card size="small" title="Non-Compliant Trend by Month" style={{ borderRadius: 8 }}
+              extra={<Text type="secondary" style={{ fontSize: 11 }}>Rising = process issue</Text>}>
+              <ChartBox type="line" data={nonCompliantChartData} options={CHART_OPTS} height={240} />
+            </Card>
+          </Col>
+        </Row>
 
-      {/* SOURCING */}
-      <Divider titlePlacement="left" style={{ fontSize: 11, color: "#888" }} styles={{ content: { margin: "0 8px 0 0" } }}>SOURCING METRICS</Divider>
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} md={12}>
-          <Card title="Source of Application" size="small">
-            <div style={{ height: "clamp(200px, 35vw, 240px)" }}>
-              <Bar data={srcAppData()} options={{ ...CHART_OPTS, indexAxis: "y", plugins: { legend: { display: false } } }} />
-            </div>
-          </Card>
-        </Col>
-        <Col xs={24} md={12}>
-          <Card title="Hired by Source" size="small">
-            <div style={{ height: "clamp(200px, 35vw, 240px)" }}>
-              <Doughnut data={srcHireData()} options={{ responsive: true, maintainAspectRatio: false, cutout: "58%",
-                plugins: { legend: { position: "right", labels: { font: { size: 10 }, boxWidth: 9, padding: 6 } } } }} />
-            </div>
-          </Card>
-        </Col>
-      </Row>
+        {/* ── RESERVED APPLICANT AGING ──────────────────────────── */}
+        <SectionLabel>Reserved Applicant Aging</SectionLabel>
+        <Card size="small" style={{ borderRadius: 8, marginBottom: 24 }}
+          title="Reserved Applicants — Days Waiting"
+          extra={<Tag color="error">{reservedAgingRows.filter((r) => r.daysWaiting > 30).length} critical (&gt;30d)</Tag>}>
+          <ReservedAgingSection agingRows={reservedAgingRows} agingBuckets={reservedAgingBuckets} />
+        </Card>
 
-      {/* MONTHLY + AGE */}
-      <Divider titlePlacement="left" style={{ fontSize: 11, color: "#888" }} styles={{ content: { margin: "0 8px 0 0" } }}>APPLICANT DISTRIBUTION</Divider>
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} md={12}>
-          <Card title="Applications & Hires by Month" size="small">
-            <div style={{ height: "clamp(200px, 35vw, 230px)" }}>
-              <Line data={monthlyData()} options={{ ...CHART_OPTS, plugins: { legend: { labels: { font: { size: 11 }, boxWidth: 10, padding: 12 } } } }} />
-            </div>
-          </Card>
-        </Col>
-        <Col xs={24} md={12}>
-          <Card title="Age Group Distribution" size="small">
-            <div style={{ height: "clamp(200px, 35vw, 230px)" }}>
-              <Bar data={ageData()} options={{ ...CHART_OPTS, plugins: { legend: { labels: { font: { size: 11 }, boxWidth: 10, padding: 12 } } } }} />
-            </div>
-          </Card>
-        </Col>
-      </Row>
+        {/* ── APPLICANT DEMOGRAPHICS ────────────────────────────── */}
+        <SectionLabel>Applicant Demographics</SectionLabel>
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Col xs={24} md={12}>
+            <Card size="small" title="Education Attainment vs Hire Rate" style={{ borderRadius: 8 }}>
+              <ChartBox type="bar" data={educChartData} options={{
+                ...CHART_OPTS_LEGEND,
+                scales: {
+                  x: { grid: { display: false }, ticks: { color: "#888", font: { size: 9 } } },
+                  y:  { id: "y",  position: "left",  ticks: { color: "#888", font: { size: 10 } } },
+                  y1: { id: "y1", position: "right", ticks: { color: "#888", font: { size: 10 }, callback: (v) => v + "%" }, grid: { display: false } },
+                },
+              }} height={260} />
+            </Card>
+          </Col>
+          <Col xs={24} md={12}>
+            <Card size="small" title="Civil Status Breakdown" style={{ borderRadius: 8 }}>
+              <ChartBox type="doughnut" data={civilStatusChartData} options={{ responsive: true, maintainAspectRatio: false, cutout: "55%", plugins: { legend: { position: "right", labels: { font: { size: 10 }, boxWidth: 9, padding: 8 } } } }} height={260} />
+            </Card>
+          </Col>
+        </Row>
 
-      {/* GENDER + OUTCOMES */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} md={12}>
-          <Card title="Gender Breakdown" size="small">
-            <GenderViz data={filtered} />
-          </Card>
-        </Col>
-        <Col xs={24} md={12}>
-          <Card title="Stage Outcome Distribution" size="small">
-            <div style={{ height: "clamp(200px, 35vw, 230px)" }}>
-              <Bar data={{
-                labels: ["Screening", "Recruitment", "Hiring", "Contract Signing"],
-                datasets: [
-                  { label: "Qualified", data: [35, 28, 22, 18], backgroundColor: PRIMARY + "cc", borderRadius: 4 },
-                  { label: "Failed", data: [20, 15, 10, 5], backgroundColor: "#f5222dcc", borderRadius: 4 },
-                  { label: "Non-Compliant", data: [10, 8, 5, 3], backgroundColor: "#faad14cc", borderRadius: 4 },
-                  { label: "On Process", data: [25, 20, 15, 10], backgroundColor: "#1677ffcc", borderRadius: 4 },
-                ],
-              }} options={{ ...CHART_OPTS, plugins: { legend: { labels: { font: { size: 10 }, boxWidth: 9, padding: 8 } } },
-                scales: { x: { stacked: true, grid: { display: false }, ticks: { color: "#888", font: { size: 10 } } }, y: { stacked: true, ticks: { color: "#888", font: { size: 10 } } } } }} />
-            </div>
-          </Card>
-        </Col>
-      </Row>
+        {/* ── HIRING OFFICER PERFORMANCE ────────────────────────── */}
+        <SectionLabel>Hiring Officer Performance</SectionLabel>
+        <Card size="small" title="Hiring Officer Leaderboard" style={{ borderRadius: 8, marginBottom: 24 }}>
+          <Table size="small" dataSource={hiringOfficerStats} columns={officerColumns} pagination={false} />
+        </Card>
 
-      {/* TABLES */}
-      <Divider titlePlacement="left" style={{ fontSize: 11, color: "#888" }} styles={{ content: { margin: "0 8px 0 0" } }}>DEEP ANALYSIS</Divider>
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} md={12}>
-          <Card title="Top Positions Applied" size="small">
-            <Table size="small" pagination={false} dataSource={posEntries}
-              columns={[
-                { title: "#", dataIndex: "rank", width: 36, render: (v) => <span style={{ fontWeight: 800, color: rankColor(v) }}>{v}</span> },
-                { title: "Position", dataIndex: "position" },
-                { title: "Applied", dataIndex: "applied", align: "right" },
-                { title: "Hired", dataIndex: "hired", align: "right" },
-                { title: "Rate", key: "rate", align: "right", render: (_, r) => <Tag color="green">{pct(r.hired, r.applied)}%</Tag> },
-              ]} />
-          </Card>
-        </Col>
-        <Col xs={24} md={12}>
-          <Card title="Branch Breakdown" size="small">
-            <Table size="small" pagination={false} dataSource={branchEntries}
-              columns={[
-                { title: "#", dataIndex: "rank", width: 36, render: (v) => <span style={{ fontWeight: 800, color: rankColor(v) }}>{v}</span> },
-                { title: "Branch", dataIndex: "branch" },
-                { title: "Applied", dataIndex: "applied", align: "right" },
-                { title: "Hired", dataIndex: "hired", align: "right" },
-                { title: "Rate", key: "rate", align: "right", render: (_, r) => <Tag color="green">{pct(r.hired, r.applied)}%</Tag> },
-              ]} />
-          </Card>
-        </Col>
-        <Col xs={24}>
-          <Card title="Source × Stage Heatmap" size="small"
-            extra={<Text type="secondary" style={{ fontSize: 11 }}>Applicant volume intensity matrix</Text>}>
-            <HeatmapViz data={filtered} />
-          </Card>
-        </Col>
-      </Row>
+        {/* ── PLACEMENT MATCH ANALYSIS ──────────────────────────── */}
+        <SectionLabel>Placement Match Analysis</SectionLabel>
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Col xs={24} md={12}>
+            <Card size="small" title="Position Preference Match Rate" style={{ borderRadius: 8 }}>
+              <PlacementMatchCard stats={placementMatchStats} />
+            </Card>
+          </Col>
+          <Col xs={24} md={12}>
+            <Card size="small" title="IQ Exam Pass Rate by Position" style={{ borderRadius: 8 }}>
+              <ChartBox type="bar" data={iqChartData} options={{ ...CHART_OPTS_STACKED, indexAxis: "y" }} height={260} />
+            </Card>
+          </Col>
+        </Row>
 
-      {/* INSIGHTS */}
-      <Divider titlePlacement="left" style={{ fontSize: 11, color: "#888" }} styles={{ content: { margin: "0 8px 0 0" } }}>RECRUITMENT INSIGHTS</Divider>
-      <Card title="AI-Style Recruitment Insights" size="small">
-        <InsightsList data={filtered} />
-      </Card>
+        {/* ── DEEP ANALYSIS TABLES ──────────────────────────────── */}
+        <SectionLabel>Deep Analysis</SectionLabel>
+        <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+          <Col xs={24} md={12}>
+            <Card size="small" title="Top Positions Applied" style={{ borderRadius: 8 }}>
+              <Table size="small" dataSource={topPositionEntries} columns={positionColumns} pagination={false} />
+            </Card>
+          </Col>
+          <Col xs={24} md={12}>
+            <Card size="small" title="Branch Breakdown" style={{ borderRadius: 8 }}>
+              <Table size="small" dataSource={branchBreakdownEntries} columns={branchColumns} pagination={false} />
+            </Card>
+          </Col>
+          <Col xs={24}>
+            <Card size="small" title="Source × Stage Heatmap" style={{ borderRadius: 8 }}
+              extra={<Text type="secondary" style={{ fontSize: 11 }}>Applicant volume intensity matrix</Text>}>
+              <HeatmapTable
+                sourceLabels={heatmapSourceLabels}
+                stageLabels={heatmapStageLabels}
+                dataGrid={heatmapDataGrid}
+                maxValue={heatmapMaxValue}
+              />
+            </Card>
+          </Col>
+        </Row>
+
+        {/* ── RECRUITMENT INSIGHTS ──────────────────────────────── */}
+        <SectionLabel>Recruitment Insights</SectionLabel>
+        <Card size="small" title="AI-Style Recruitment Insights" style={{ borderRadius: 8, marginBottom: 32 }}>
+          {recruitmentInsights.map((insight, i) => (
+            <Alert
+              key={i}
+              type={insight.type}
+              icon={insight.icon}
+              title={insight.text}
+              showIcon
+              style={{ marginBottom: 12, borderRadius: 8 }}
+            />
+          ))}
+        </Card>
+
+      </div>
     </div>
   );
 }
