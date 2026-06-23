@@ -149,7 +149,7 @@ export default function LoginView({
         {isInvalid && (
           <Alert
             type="error"
-            message="Invalid email or password. Please try again."
+            title="Invalid email or password. Please try again."
             showIcon
             style={{ marginBottom: 20, borderRadius: 8 }}
           />
